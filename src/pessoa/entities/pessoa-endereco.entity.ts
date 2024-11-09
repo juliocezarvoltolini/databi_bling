@@ -21,5 +21,6 @@ export class PessoaEndereco {
     numero: string;
     @Column({name: 'complemento', type: 'varchar', length: 200})
     complemento: string;
+
   
 } 

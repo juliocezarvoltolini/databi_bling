@@ -8,6 +8,9 @@ export class Pessoa {
     @PrimaryGeneratedColumn({ type: 'int8' })
     id: number;
 
+    @Column({name: 'id_original', type: 'varchar', length: '50', nullable: true, unique: true})
+    idOriginal: string;
+
     @Column({ type: 'char', name: 'tipo_pessoa', length: 1 })
     tipoPessoa: TipoPessoa;
 
@@ -50,7 +53,7 @@ export class Pessoa {
     @Column({ type: 'date', nullable: true })
     dataFundacao: Date;
 
-    @OneToMany(() => PessoaEndereco, endereco => endereco.pessoa, { cascade: true })
+    @OneToMany(() => PessoaEndereco, endereco => endereco.pessoa, {cascade: true})
     enderecos: PessoaEndereco[];
 
 }

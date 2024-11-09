@@ -18,6 +18,7 @@ import { ImportCliente, TesteTask } from './task/interface/task.interface';
 import { BlingModule } from './integracao/bling/bling.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { HttpModule } from '@nestjs/axios';
+import { ControleImportacaoModule } from './controle-importacao/controle-importacao.module';
 
 @Module({
   imports: [DataBaseModule,
@@ -35,7 +36,8 @@ import { HttpModule } from '@nestjs/axios';
       isGlobal: true,
       load: [blingConstants]
     }),
-    ScheduleModule.forRoot()
+    ScheduleModule.forRoot(),
+    ControleImportacaoModule
   ],
   controllers: [AppController],
   providers: [AppService, Logger, TesteTask, ImportCliente],

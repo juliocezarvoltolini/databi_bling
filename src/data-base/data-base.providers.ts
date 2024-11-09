@@ -15,7 +15,7 @@ export const dataBaseProviders = [
                     __dirname + '/../**/*.entity{.ts,.js}',
                 ],
                 synchronize: true,
-                logging: true
+                logging: false
             });
 
             return dataSource.initialize()
