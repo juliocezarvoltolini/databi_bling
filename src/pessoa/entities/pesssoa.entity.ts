@@ -53,7 +53,7 @@ export class Pessoa {
     @Column({ type: 'date', nullable: true })
     dataFundacao: Date;
 
-    @OneToMany(() => PessoaEndereco, endereco => endereco.pessoa, {cascade: true})
+    @OneToMany(() => PessoaEndereco, endereco => endereco.pessoa, {cascade: true, eager: true})
     enderecos: PessoaEndereco[];
 
 }

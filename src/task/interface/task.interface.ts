@@ -16,6 +16,8 @@ import {
   tap,
   timer,
 } from 'rxjs';
+import { IUF } from 'src/common/types/uf.types';
+import { Assigned } from 'src/common/util/object/object.util';
 import { ControleImportacaoService } from 'src/controle-importacao/controle-importacao.service';
 import { ControleImportacao } from 'src/controle-importacao/entities/controle-importacao.entity';
 import { AuthBlingService } from 'src/integracao/bling/auth-bling.service';
@@ -25,7 +27,7 @@ import { Pessoa } from 'src/pessoa/entities/pesssoa.entity';
 import { PessoaService } from 'src/pessoa/pessoa.service';
 import { ProdutoService } from 'src/produto/produto.service';
 import { setTimeout } from 'timers/promises';
-import { QueryFailedError } from 'typeorm';
+import { DataSource, QueryFailedError, SelectQueryBuilder } from 'typeorm';
 
 interface ITaskResult<T> {
   retorno: T;
@@ -54,6 +56,7 @@ export class ImportCliente implements OnModuleInit {
     private readonly service: AuthBlingService,
     private readonly pessoaService: PessoaService,
     private readonly controleImportacaoService: ControleImportacaoService,
+    @Inject('DATA_SOURCE') private dataSource: DataSource,
   ) {}
 
   onModuleInit() {
@@ -82,7 +85,7 @@ export class ImportCliente implements OnModuleInit {
       )
       .subscribe({
         next: (value: Pessoa) => {
-          console.log(
+          logger.info(
             `Item processado com sucesso. ID:${value.id} - NOME: ${value.nome}`,
           );
         },
@@ -120,7 +123,7 @@ export class ImportCliente implements OnModuleInit {
               ).pipe(
                 switchMap((response) => {
                   if (response.data.length > 0) {
-                    return this.Salvar(response);
+                    return this.SalvarResposta(response);
                   } else {
                     const erro = new Error(
                       'Não há mais contatos para processar.',
@@ -151,7 +154,18 @@ export class ImportCliente implements OnModuleInit {
     }
   }
 
-  private Salvar(response: IGetResponse) {
+  private RemoverEndereco(pessoa: Pessoa): Observable<any> {
+    let enderecos = pessoa.enderecos.map((end) => {
+      return end.id;
+    });
+    if (enderecos.length > 0)
+      return from(
+        this.dataSource.manager.getRepository(PessoaEndereco).delete(enderecos),
+      );
+    else return of(null);
+  }
+
+  private SalvarResposta(response: IGetResponse) {
     return from(response.data).pipe(
       // Processa cada item serializadamente
       concatMap((item) =>
@@ -164,37 +178,56 @@ export class ImportCliente implements OnModuleInit {
             const contato = response.data;
             const pessoa = this.mapearContatoParaPessoa(contato);
 
-            return from(this.pessoaService.create(pessoa)).pipe(
-              catchError((err) => {
-                console.log(
-                  '=======================Ocorreu um erro ',
-                  err.message,
-                );
-                if (
-                  err.message.includes('duplicate key') ||
-                  err.message.includes(
-                    'duplicar valor da chave viola a restrição de unicidade',
-                  )
-                ) {
-                  // Trata erros de chave duplicada
-                  const pessoaFilter = this.criarFiltroPessoa(pessoa);
-                  return this.pessoaService.find(pessoaFilter).pipe(
-                    switchMap((consulta) => {
-                      if (consulta.length > 0) {
-                        pessoa.id = consulta[0].id;
-                      }
-                      pessoa.enderecos = [];
-                      return of(pessoa); // Continua o fluxo
-                    }),
-                  );
-                }
-                // Para outros erros, apenas retorna a pessoa sem alteração
-                return of(pessoa);
-              }),
-            );
+            return this.Salvar(pessoa);
           }),
         ),
       ),
+    );
+  }
+
+  private Salvar(pessoa: Pessoa): Observable<Pessoa> {
+    return from(this.pessoaService.repository.save(pessoa)).pipe(
+      catchError((err) => {
+        logger.warn(`Erro ao persitir entidade Pessoa(DOC:${pessoa.numeroDocumento} / 
+          RG:${pessoa.rg} / idOriginal:${pessoa.idOriginal}). Motivo: ${err.message}` );
+        if (
+          err.message.includes('duplicate key') ||
+          err.message.includes(
+            'duplicar valor da chave viola a restrição de unicidade',
+          )
+        ) {
+          const pessoaFilter = this.criarFiltroPessoa(pessoa);
+
+          return from(pessoaFilter.getMany()).pipe(
+            switchMap((consulta) => {
+              if (consulta.length > 0) {
+                pessoa.id = consulta[0].id;
+                logger.info('Salvar novamente com id ', pessoa.id);
+
+                if (consulta[0].enderecos)
+                  if (consulta[0].enderecos.length > 0) {
+                    this.RemoverEndereco(consulta[0]).subscribe();
+                  }
+
+                // Certifique-se de que os endereços estão associados corretamente
+                if (pessoa.enderecos?.length > 0) {
+                  pessoa.enderecos = pessoa.enderecos.map((end) => {
+                    end.pessoa = pessoa; // Associa o endereço à pessoa
+                    return end;
+                  });
+                }
+
+                // Salva novamente com a referência correta
+                return this.Salvar(pessoa);
+              } else {
+                return of(pessoa);
+              }
+            }),
+          );
+        }
+        // Para outros erros, apenas retorna a pessoa sem alteração
+        return of(pessoa);
+      }),
     );
   }
 
@@ -230,29 +263,47 @@ export class ImportCliente implements OnModuleInit {
     pessoa.email = contato.email;
     pessoa.orgaoEmissor = contato.orgaoEmissor;
     pessoa.situacao = contato.situacao === 'A' ? 1 : 0;
+    const cep = (contato.endereco.geral.cep as string)
+      .replace(/\D/g, '')
+      .trim();
+    const municipio = (contato.endereco.geral.municipio as string).trim();
+    const uf = (contato.endereco.geral.uf as string).trim();
 
-    const endereco = new PessoaEndereco();
-    endereco.cep = contato.endereco.geral.cep;
-    endereco.bairro = contato.endereco.geral.bairro;
-    endereco.municipio = contato.endereco.geral.municipio;
-    endereco.uf = contato.endereco.geral.uf;
-    endereco.complemento = contato.endereco.geral.complemento;
-    endereco.numero = contato.endereco.geral.numero;
+    if (municipio.length > 0 && uf.length > 0) {
+      const endereco = new PessoaEndereco();
+      endereco.cep = cep;
+      endereco.bairro = contato.endereco.geral.bairro;
+      endereco.municipio = municipio;
+      endereco.uf = uf as IUF;
+      endereco.complemento = contato.endereco.geral.complemento;
+      endereco.numero = contato.endereco.geral.numero;
 
-    pessoa.enderecos = [endereco];
+      pessoa.enderecos = [endereco];
+    } else {
+      pessoa.enderecos = [];
+    }
 
     return pessoa;
   }
 
-  private criarFiltroPessoa(pessoa: Pessoa): any {
-    const pessoaFilter: any = {};
-    if (pessoa.numeroDocumento?.length > 0) {
-      pessoaFilter['numeroDocumento'] = pessoa.numeroDocumento;
+  private;
+  criarFiltroPessoa(pessoa: Pessoa): SelectQueryBuilder<Pessoa> {
+    let select = this.pessoaService.repository
+      .createQueryBuilder('p')
+      .orWhere('p.id_original = :idOriginal', {
+        idOriginal: pessoa.idOriginal,
+      });
+    if (pessoa.numeroDocumento && pessoa.numeroDocumento.length > 0) {
+      select.orWhere('p.numero_documento = :numeroDocumento', {
+        numeroDocumento: pessoa.numeroDocumento,
+      });
     }
-    if (pessoa.rg?.length > 0) {
-      pessoaFilter['rg'] = pessoa.rg;
+
+    if (pessoa.rg && pessoa.rg.length > 0) {
+      select.orWhere('p.rg = :rg', { rg: pessoa.rg });
     }
-    return pessoaFilter;
+
+    return select;
   }
 }
 

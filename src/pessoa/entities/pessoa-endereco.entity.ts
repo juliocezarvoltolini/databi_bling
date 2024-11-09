@@ -7,7 +7,7 @@ export class PessoaEndereco {
     @PrimaryGeneratedColumn({type: 'int4'})
     id: number;
     @JoinColumn({name: 'id_pessoa', referencedColumnName: 'id'})
-    @ManyToOne(() => Pessoa, pessoa => pessoa.enderecos)
+    @ManyToOne(() => Pessoa, pessoa => pessoa.enderecos, { onDelete: 'CASCADE' })
     pessoa: Pessoa;
     @Column({name: 'cep', type: 'varchar', length: '8'})
     cep: string;
