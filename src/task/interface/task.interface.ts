@@ -109,14 +109,14 @@ export class ImportCliente implements OnModuleInit {
       });
   }
 
-  execute(contador: number): Observable<Pessoa | Pessoa[]> {
+  execute(contador: number, timeout: number = 1000): Observable<Pessoa | Pessoa[]> {
     try {
       return from(this.service.getAcessToken()).pipe(
         switchMap((token) => {
           this.blingService = new Bling(token);
           console.log('Criou o serviço Bling.');
 
-          return timer(1000).pipe(
+          return timer(timeout).pipe(
             switchMap(() => {
               return from(
                 this.blingService.contatos.get({ pagina: contador }),
@@ -202,7 +202,7 @@ export class ImportCliente implements OnModuleInit {
             switchMap((consulta) => {
               if (consulta.length > 0) {
                 pessoa.id = consulta[0].id;
-                logger.info('Salvar novamente com id ', pessoa.id);
+                logger.info('Salvar novamente com id ' + pessoa.id );
 
                 if (consulta[0].enderecos)
                   if (consulta[0].enderecos.length > 0) {
