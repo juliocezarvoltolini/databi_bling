@@ -10,5 +10,7 @@ export class Fornecedor {
     pessoa: Pessoa;
     @Column({name: 'situacao', type: 'int2', default: 1, nullable: false})
     situacao: Situacao;
+    @Column({name: 'id_original', type: 'varchar', length: 50})
+    idOriginal: string;
 
 }

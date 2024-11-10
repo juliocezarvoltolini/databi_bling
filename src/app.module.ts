@@ -14,11 +14,12 @@ import { Logger } from 'winston';
 import { AuthModule } from './auth-constants/auth-constants.module';
 import blingConstants from './integracao/bling/bling.constants';
 import { AuthBlingService } from './integracao/bling/auth-bling.service';
-import { ImportCliente, TesteTask } from './task/interface/task.interface';
+import { ImportCliente } from './task/interface/task.interface';
 import { BlingModule } from './integracao/bling/bling.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { HttpModule } from '@nestjs/axios';
 import { ControleImportacaoModule } from './controle-importacao/controle-importacao.module';
+import { VendedorImportacao } from './task/interface/vendedor-importacao';
 
 @Module({
   imports: [DataBaseModule,
@@ -37,9 +38,9 @@ import { ControleImportacaoModule } from './controle-importacao/controle-importa
       load: [blingConstants]
     }),
     ScheduleModule.forRoot(),
-    ControleImportacaoModule
+    ControleImportacaoModule,
   ],
   controllers: [AppController],
-  providers: [AppService, Logger, TesteTask, ImportCliente],
+  providers: [AppService, Logger, ImportCliente, VendedorImportacao],
 })
 export class AppModule { }

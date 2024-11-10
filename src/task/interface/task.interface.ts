@@ -25,28 +25,8 @@ import { logger } from 'src/logger/winston.logger';
 import { PessoaEndereco } from 'src/pessoa/entities/pessoa-endereco.entity';
 import { Pessoa } from 'src/pessoa/entities/pesssoa.entity';
 import { PessoaService } from 'src/pessoa/pessoa.service';
-import { ProdutoService } from 'src/produto/produto.service';
-import { setTimeout } from 'timers/promises';
 import { DataSource, QueryFailedError, SelectQueryBuilder } from 'typeorm';
 
-interface ITaskResult<T> {
-  retorno: T;
-  task: ITask<T>;
-}
-
-export interface ITask<T> {
-  taskName: string;
-  execute(): Observable<ITaskResult<T>>;
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) =>
-    (setTimeout as unknown as (handler: () => void, timeout: number) => number)(
-      resolve,
-      ms,
-    ),
-  );
-}
 
 @Injectable()
 export class ImportCliente implements OnModuleInit {
@@ -60,7 +40,7 @@ export class ImportCliente implements OnModuleInit {
   ) {}
 
   onModuleInit() {
-    this.iniciar();
+    // this.iniciar();
   }
 
   async iniciar() {
@@ -286,8 +266,7 @@ export class ImportCliente implements OnModuleInit {
     return pessoa;
   }
 
-  private;
-  criarFiltroPessoa(pessoa: Pessoa): SelectQueryBuilder<Pessoa> {
+  private criarFiltroPessoa(pessoa: Pessoa): SelectQueryBuilder<Pessoa> {
     let select = this.pessoaService.repository
       .createQueryBuilder('p')
       .orWhere('p.id_original = :idOriginal', {
@@ -307,96 +286,3 @@ export class ImportCliente implements OnModuleInit {
   }
 }
 
-// @Injectable()
-// export class ImportProdutos {
-//     private blingService: Bling;
-//     constructor(private readonly service: AuthBlingService) {
-
-//     }
-
-//     async execute() {
-//         const token = await this.service.getAcessToken()
-//         this.blingService = new Bling(token);
-//         let repeat = true;
-//         let contador = 1;
-//         while (repeat) {
-//             const response = await this.blingService.produtos.get({ pagina: contador });
-//             response.data.forEach(() => {
-
-//             })
-//             contador++;
-//         }
-
-//     }
-
-// }
-
-@Injectable()
-export class TesteTask {
-  taskName: string;
-
-  constructor(private readonly service: AuthBlingService) {
-    console.log('criou');
-  }
-  // @Interval(5000)
-  async execute() {
-    this.service.getAcessToken().then(
-      (value) => {
-        console.log('DEU CERTO: ', value);
-      },
-      (error) => {
-        console.log('Erro: ', error);
-      },
-    );
-  }
-}
-
-export class ManagerTask {
-  private observable: Observable<ITaskResult<any>>;
-
-  constructor(private readonly tasks: ITask<any>[]) {
-    this.tasks = [];
-  }
-
-  addTask(task: ITask<any>) {
-    this.tasks.push(task);
-  }
-
-  start(): Observable<any> {
-    this.observable = interval(60000).pipe(
-      switchMap(() => {
-        return from(this.tasks).pipe(
-          concatMap((task) => {
-            return task.execute().pipe(
-              catchError((error) => {
-                throw {
-                  taskName: task.taskName,
-                  message: error.message,
-                  stack: error.stack,
-                };
-              }),
-            );
-          }),
-        );
-      }),
-    );
-
-    this.observable.subscribe({
-      next: (value) => {
-        logger.log('info', 'Tarefa %s concluída com sucesso.', [
-          value.task.taskName,
-        ]);
-      },
-      error: (erro) => {
-        logger.error(
-          `Falha ao executar a tarefa ${erro.taskName}: ${erro.message}`,
-          {
-            stack: erro.stack,
-          },
-        );
-      },
-    });
-
-    return this.observable;
-  }
-}
