@@ -12,7 +12,7 @@ export class Vendedor {
     pessoa: Pessoa;
     @Column({name: 'situacao', type: 'int2'})
     situacao: Situacao;
-    @Column({name: 'id_original', type: 'varchar', length: 50})
+    @Column({name: 'id_original', type: 'varchar', length: 50, unique: true})
     idOriginal: string;
     @OneToMany(() => VendedorComissao, comissao => comissao.vendedor, {cascade: true, eager: true})
     comissao: VendedorComissao[];  

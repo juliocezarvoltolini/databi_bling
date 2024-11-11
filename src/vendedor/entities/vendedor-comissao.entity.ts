@@ -10,6 +10,6 @@ export class VendedorComissao {
     vendedor: Vendedor;
     @Column({name: 'percentual_desconto', type: 'numeric', scale: 2, precision:5})
     percentualDesconto: number;
-    @Column({name: 'percentual_desconto', type: 'numeric', scale: 2, precision:5})
+    @Column({name: 'percentual_comissao', type: 'numeric', scale: 2, precision:5})
     percentualComissao: number;
 }
