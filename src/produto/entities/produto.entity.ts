@@ -1,7 +1,7 @@
-import { Column, Entity, JoinColumn, JoinTable, ManyToMany, ManyToOne, PrimaryGeneratedColumn } from "typeorm";
+import { Column, Entity, JoinColumn, JoinTable, ManyToMany, ManyToOne, OneToMany, PrimaryGeneratedColumn } from "typeorm";
 import { Formato } from "./produto.types";
 import { Fornecedor } from "src/fornecedor/entities/fornecedor.entity";
-import { ProdutoCategoriaOpcao } from "./produto-categoria.entity";
+import { ProdutoCategoriaOpcao, ProdutoCategoriaRelacao } from "./produto-categoria.entity";
 
 @Entity('produto')
 export class Produto {
@@ -33,6 +33,8 @@ export class Produto {
     valorPreco: number;
     @Column({name: 'valor_custo', type: 'numeric', scale: 6, precision: 14})
     valorCusto: number;
-    @ManyToMany(() => ProdutoCategoriaOpcao, { cascade: true, eager: true })
-    categoriasOpcao: ProdutoCategoriaOpcao[];
+    @Column({name: 'id_original', type: 'varchar', length: 50})
+    idOriginal: string;
+    @OneToMany(() => ProdutoCategoriaRelacao, rel => rel.produto, { cascade: true, eager: true })
+    categoriasOpcao: ProdutoCategoriaRelacao[];
 }

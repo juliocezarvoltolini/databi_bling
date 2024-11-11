@@ -1,4 +1,4 @@
-import { Column, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from "typeorm";
+import { Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn } from "typeorm";
 import { Produto } from "./produto.entity";
 import { ProdutoCategoriaTipo } from "./produto.types";
 
@@ -10,6 +10,8 @@ export class ProdutoCategoria {
     nome: string;
     @Column({name: 'tipo', type: 'char', length: 1, default: 'C', nullable: false})
     tipo: ProdutoCategoriaTipo;
+    @OneToMany(() => ProdutoCategoriaOpcao, opcao => opcao.produtoCategoria, {cascade: true})
+    opcoes: ProdutoCategoriaOpcao[];
 }
 
 @Entity({name: 'produto_categoria_opcao'})
@@ -27,7 +29,7 @@ export class ProdutoCategoriaOpcao {
 export class ProdutoCategoriaRelacao {
     @PrimaryGeneratedColumn({type:  'int4'})
     id: number;
-    @ManyToOne(() => Produto, {eager: true})
+    @ManyToOne(() => Produto)
     @JoinColumn({name: 'id_produto', referencedColumnName: 'id'})
     produto: Produto;
     @ManyToOne(() => ProdutoCategoriaOpcao, {eager: true})
