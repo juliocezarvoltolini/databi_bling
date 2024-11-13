@@ -26,18 +26,11 @@ import { IUF } from 'src/common/types/uf.types';
 import { Assigned } from 'src/common/util/object/object.util';
 import { ControleImportacaoService } from 'src/controle-importacao/controle-importacao.service';
 import { ControleImportacao } from 'src/controle-importacao/entities/controle-importacao.entity';
-import { Fornecedor } from 'src/fornecedor/entities/fornecedor.entity';
 import { AuthBlingService } from 'src/integracao/bling/auth-bling.service';
 import { logger } from 'src/logger/winston.logger';
 import { Pessoa } from 'src/pessoa/entities/pesssoa.entity';
-import {
-  ProdutoCategoria,
-  ProdutoCategoriaOpcao,
-  ProdutoCategoriaRelacao,
-} from 'src/produto/entities/produto-categoria.entity';
 import { Produto } from 'src/produto/entities/produto.entity';
 import { ProdutoService } from 'src/produto/produto.service';
-import { VendedorComissao } from 'src/vendedor/entities/vendedor-comissao.entity';
 import { DataSource, QueryFailedError, Repository, SelectQueryBuilder } from 'typeorm';
 
 @Injectable()
@@ -52,7 +45,7 @@ export class ProdutoImportacao implements OnModuleInit {
   ) {}
 
   onModuleInit() {
-    // this.iniciar();
+    this.iniciar();
   }
 
   async iniciar() {

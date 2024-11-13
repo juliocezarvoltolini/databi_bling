@@ -9,7 +9,7 @@ export class Produto {
     id: number;
     @Column({name: 'descricao', type: 'varchar', nullable: false, length: 200})
     descricao: string;
-    @Column({name: 'descricao_curta', type: 'varchar', length: 50, nullable: true})
+    @Column({name: 'descricao_curta', type: 'text', nullable: true})
     descricaoCurta: string;
     @Column({name: 'situacao', type: 'int2', default: 1, nullable: false})
     situacao: Situacao;
@@ -33,7 +33,7 @@ export class Produto {
     valorPreco: number;
     @Column({name: 'valor_custo', type: 'numeric', scale: 6, precision: 14})
     valorCusto: number;
-    @Column({name: 'id_original', type: 'varchar', length: 50})
+    @Column({name: 'id_original', type: 'varchar', length: 50, unique: true})
     idOriginal: string;
     @OneToMany(() => ProdutoCategoriaRelacao, rel => rel.produto, { cascade: true, eager: true })
     categoriasOpcao: ProdutoCategoriaRelacao[];

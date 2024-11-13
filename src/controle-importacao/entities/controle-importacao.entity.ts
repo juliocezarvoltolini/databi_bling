@@ -8,4 +8,6 @@ export class ControleImportacao {
     tabela: string;
     @Column({name: 'pagina', type: 'int4'})
     pagina: number;
+    @Column({name: 'ultimo_index_processado', type: 'int2', nullable: true})
+    ultimoIndexProcessado: number;
 }

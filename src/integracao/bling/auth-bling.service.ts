@@ -60,72 +60,59 @@ export class AuthBlingService {
         }
     }
 
-    private atualizarTokenNoBAnco(token: string, expire: Date, refreshToken: string) {
-        console.log(token, '\n', expire, '\n', refreshToken)
+    private atualizarTokenNoBanco(token: string, expire: Date, refreshToken: string) {
+        console.log(token, '\n', expire, '\n', refreshToken);
         this.accessToken = token;
         this.refreshToken = refreshToken;
         this.expire = expire;
-
-        let auth: AuthConstants[] = [];
+    
         let authConst = new AuthConstants();
         authConst.empresa = this.empresa;
-        this.authConstantsService.find(authConst).subscribe(
-            consulta => {
+    
+        this.authConstantsService.find(authConst).pipe(
+            map((consulta) => {
+                let auth: AuthConstants[] = [];
+    
+                // Atualiza os valores existentes
                 consulta.forEach((value) => {
                     if (value.nome === 'access_token') {
-                        auth.push({ ...value });
-                        auth[auth.length - 1].valor = token;
-                        auth[auth.length - 1].expira = expire;
+                        auth.push({ ...value, valor: token, expira: expire });
                     } else if (value.nome === 'refresh_token') {
-                        auth.push({ ...value });
-                        auth[auth.length - 1].valor = refreshToken;
-                    };
-                });
-                console.log('auth', auth)
-
-                if (auth.length <= 1) {
-                    let insert = new AuthConstants();
-                    insert.empresa = this.empresa;
-                    insert.nome = 'access_token';
-                    insert.valor = token;
-                    insert.expira = expire
-
-                    let insert2 = new AuthConstants();
-                    insert2.empresa = this.empresa;
-                    insert2.nome = 'refresh_token';
-                    insert2.valor = token;
-                    if (auth.length = 0) {
-                        auth.push(insert);
-                        auth.push(insert2);
-                    } else {
-                        auth.push(auth[0].nome === 'access_token' ? insert2 : insert);
+                        auth.push({ ...value, valor: refreshToken });
                     }
-
+                });
+    
+                // Adiciona novos registros caso necessário
+                if (auth.length === 0) {
+                    auth.push(
+                        { empresa: this.empresa, nome: 'access_token', valor: token, expira: expire } as AuthConstants,
+                        { empresa: this.empresa, nome: 'refresh_token', valor: refreshToken } as AuthConstants
+                    );
+                } else if (auth.length === 1) {
+                    const existingName = auth[0].nome;
+                    auth.push(
+                        {
+                            empresa: this.empresa,
+                            nome: existingName === 'access_token' ? 'refresh_token' : 'access_token',
+                            valor: existingName === 'access_token' ? refreshToken : token,
+                            expira: existingName === 'access_token' ? undefined : expire,
+                        } as AuthConstants
+                    );
                 }
-
-                this.authConstantsService.create(auth);
-
-            }
-
-        )
-
+    
+                return auth;
+            }),
+            switchMap((auth) => this.authConstantsService.repository.save(auth)) // Salva os dados no banco
+        ).subscribe({
+            next: () => console.log('Tokens atualizados com sucesso'),
+            error: (err) => console.error('Erro ao atualizar os tokens:', err),
+        });
     }
 
 
     private async solicitarToken(): Promise<{ accessToken: string, expire_in: Date, refreshToken: string }> {
         let retorno;
 
-        const agora = Date.now();
-        const delay = 200; // Milissegundos de espera entre cada requisição
-
-        // Verificar se o tempo da última requisição foi inferior a 333ms
-        if (agora - this.lastRequestTime < delay) {
-            const waitTime = delay - (agora - this.lastRequestTime);
-            await new Promise(() => setTimeout(waitTime)); // Aguardar até o tempo limite
-        }      
-
-
-        this.lastRequestTime = Date.now(); // Atualizar o tempo da última requisição
         if (!Assigned(this.refreshToken)) {
 
 
@@ -133,7 +120,7 @@ export class AuthBlingService {
 
             if (!this.accessToken) {
                 retorno = await this.postApiBling(code, "authorization_code");
-                this.atualizarTokenNoBAnco(retorno.accessToken, retorno.expire_in, retorno.refreshToken)
+                this.atualizarTokenNoBanco(retorno.accessToken, retorno.expire_in, retorno.refreshToken)
             }
 
         }
@@ -147,7 +134,7 @@ export class AuthBlingService {
 
         if (this.expire.getTime() < Date.now()) {
             retorno = await this.postApiBling(this.refreshToken, "refresh_token");
-            this.atualizarTokenNoBAnco(retorno.accessToken, retorno.expire_in, retorno.refreshToken);
+            this.atualizarTokenNoBanco(retorno.accessToken, retorno.expire_in, retorno.refreshToken);
         }
 
         return retorno;

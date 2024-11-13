@@ -20,6 +20,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { HttpModule } from '@nestjs/axios';
 import { ControleImportacaoModule } from './controle-importacao/controle-importacao.module';
 import { VendedorImportacao } from './task/interface/vendedor-importacao';
+import { ProdutoImportacao } from './task/interface/produto-importacao';
 
 @Module({
   imports: [DataBaseModule,
@@ -41,6 +42,6 @@ import { VendedorImportacao } from './task/interface/vendedor-importacao';
     ControleImportacaoModule,
   ],
   controllers: [AppController],
-  providers: [AppService, Logger, ImportCliente, VendedorImportacao],
+  providers: [AppService, Logger, ImportCliente, VendedorImportacao, ProdutoImportacao],
 })
 export class AppModule { }

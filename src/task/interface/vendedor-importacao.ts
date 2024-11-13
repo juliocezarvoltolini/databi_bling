@@ -41,7 +41,7 @@ export class VendedorImportacao implements OnModuleInit {
   ) {}
 
   onModuleInit() {
-    this.iniciar();
+    // this.iniciar();
   }
 
   async iniciar() {
