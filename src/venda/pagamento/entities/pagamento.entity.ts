@@ -8,10 +8,12 @@ export class Pagamento {
     @PrimaryGeneratedColumn({type: 'int4'})
     id: number;
     @JoinColumn({name: 'id_venda', referencedColumnName: 'id'})
-    @ManyToOne(() => Venda)
+    @ManyToOne(() => Venda, venda => venda.id, {onDelete: "CASCADE"})
     venda: Venda;
     @Column({name: 'parcela', type: 'varchar', length: 7})
     parcela: string;
+    @Column({name: 'observacao', type: 'varchar', length: 200})
+    observacao: string;
     @Column({name: 'data_emissao', type: 'timestamp', nullable: false})
     dataEmissao: Date;
     @Column({name: 'data_vencimento', type: 'timestamp', nullable: false})
@@ -21,5 +23,7 @@ export class Pagamento {
     formaPagamento: FormaPagamento;
     @Column({name: 'valor', type: 'numeric', precision: 14, scale: 2})
     valor: number;
+    @Column({name: 'id_original', type: 'varchar', length: 50, unique: true})
+    idOriginal: string;
     
 }

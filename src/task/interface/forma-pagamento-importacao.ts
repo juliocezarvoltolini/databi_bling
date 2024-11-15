@@ -2,8 +2,8 @@ import { HttpService } from '@nestjs/axios';
 import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
 import { Cron, CronExpression, Interval } from '@nestjs/schedule';
 import Bling from 'bling-erp-api';
-import { IFindResponse } from 'bling-erp-api/lib/entities/vendedores/interfaces/find.interface';
-import { IGetResponse } from 'bling-erp-api/lib/entities/vendedores/interfaces/get.interface';
+import { IFindResponse } from 'bling-erp-api/lib/entities/formasDePagamento/interfaces/find.interface';
+import { IGetResponse } from 'bling-erp-api/lib/entities/formasDePagamento/interfaces/get.interface';
 import {
   catchError,
   concatMap,
@@ -21,6 +21,8 @@ import { IUF } from 'src/common/types/uf.types';
 import { Assigned } from 'src/common/util/object/object.util';
 import { ControleImportacaoService } from 'src/controle-importacao/controle-importacao.service';
 import { ControleImportacao } from 'src/controle-importacao/entities/controle-importacao.entity';
+import { FormaPagamento } from 'src/forma-pagamento/entities/forma-pagamento.entity';
+import { FormaPagamentoService } from 'src/forma-pagamento/forma-pagamento.service';
 import { AuthBlingService } from 'src/integracao/bling/auth-bling.service';
 import { logger } from 'src/logger/winston.logger';
 import { Pessoa } from 'src/pessoa/entities/pesssoa.entity';
@@ -35,7 +37,7 @@ export class VendedorImportacao implements OnModuleInit {
 
   constructor(
     private readonly service: AuthBlingService,
-    private readonly vendedorService: VendedorService,
+    private readonly formaPagamentoService: FormaPagamentoService,
     private readonly controleImportacaoService: ControleImportacaoService,
     @Inject('DATA_SOURCE') private dataSource: DataSource,
   ) {}
@@ -47,7 +49,7 @@ export class VendedorImportacao implements OnModuleInit {
   async iniciar() {
     let controleImportacao: ControleImportacao;
     this.controleImportacaoService
-      .find({ tabela: 'vendedor' })
+      .find({ tabela: 'forma-pagamento' })
       .pipe(
         switchMap((consulta) => {
           if (consulta.length > 0) {
@@ -55,7 +57,7 @@ export class VendedorImportacao implements OnModuleInit {
             console.log('Pesquisou e encontrou no banco: ', consulta);
           } else {
             controleImportacao = new ControleImportacao();
-            controleImportacao.tabela = 'vendedor';
+            controleImportacao.tabela = 'forma-pagamento';
             controleImportacao.pagina = 0;
           }
 
@@ -65,9 +67,9 @@ export class VendedorImportacao implements OnModuleInit {
         }),
       )
       .subscribe({
-        next: (value: Vendedor) => {
+        next: (value: FormaPagamento) => {
           logger.info(
-            `Item processado com sucesso. ID:${value.id} - NOME: ${value.pessoa.nome}`,
+            `Item processado com sucesso. ID:${value.id} - NOME: ${value.nome}`,
           );
         },
         error: (err) => {
@@ -93,7 +95,7 @@ export class VendedorImportacao implements OnModuleInit {
   execute(
     contador: number,
     timeout: number = 1000,
-  ): Observable<Vendedor | Vendedor[]> {
+  ): Observable<FormaPagamento | FormaPagamento[]> {
     try {
       return from(this.service.getAcessToken()).pipe(
         switchMap((token) => {
@@ -103,14 +105,14 @@ export class VendedorImportacao implements OnModuleInit {
           return timer(timeout).pipe(
             switchMap(() => {
               return from(
-                this.blingService.vendedores.get({ pagina: contador }),
+                this.blingService.formasDePagamento.get({ pagina: contador }),
               ).pipe(
                 switchMap((response) => {
                   if (response.data.length > 0) {
                     return this.SalvarResposta(response);
                   } else {
                     const erro = new Error(
-                      'Não há mais contatos para processar.',
+                      'Não há mais formas de pagamento para processar.',
                     );
                     erro.name = 'zero';
                     throw erro;
@@ -138,19 +140,6 @@ export class VendedorImportacao implements OnModuleInit {
     }
   }
 
-  RemoverComissoes(vendedor: Vendedor): Observable<any> {
-    let comissoes = vendedor.comissao.map((end) => {
-      return end.id;
-    });
-    if (comissoes.length > 0)
-      return from(
-        this.dataSource.manager
-          .getRepository(VendedorComissao)
-          .delete(comissoes),
-      );
-    else return of(null);
-  }
-
   private SalvarResposta(response: IGetResponse) {
     return from(response.data).pipe(
       // Processa cada item serializadamente
@@ -158,13 +147,13 @@ export class VendedorImportacao implements OnModuleInit {
         timer(500).pipe(
           // Adiciona um atraso de 500ms entre cada item
           switchMap(() =>
-            from(this.blingService.vendedores.find({ idVendedor: item.id })),
+            from(this.blingService.formasDePagamento.find({ idFormaPagamento: item.id })),
           ),
           switchMap((response) => {
             console.log(response);
-            return this.mapearContatoParaPessoa(response).pipe(
-              switchMap((vendedor) => {
-                return this.Salvar(vendedor);
+            return this.mapearFormaPagamento(response).pipe(
+              switchMap((forma) => {
+                return this.Salvar(forma);
               }),
             );
           }),
@@ -173,11 +162,11 @@ export class VendedorImportacao implements OnModuleInit {
     );
   }
 
-  Salvar(vendedor: Vendedor): Observable<Vendedor> {
-    return from(this.vendedorService.repository.save(vendedor)).pipe(
+  Salvar(formaPagamento: FormaPagamento): Observable<FormaPagamento> {
+    return from(this.formaPagamentoService.repository.save(formaPagamento)).pipe(
       catchError((err) => {
         logger.warn(
-          `Erro ao persitir entidade Vendedor(NOME: ${vendedor?.pessoa.nome} / idOriginal:${vendedor.idOriginal}). Motivo: ${err.message}`,
+          `Erro ao persitir entidade FormaPagamento(NOME: ${formaPagamento.nome} / idOriginal:${formaPagamento.idOriginal}). Motivo: ${err.message}`,
         );
         if (
           err.message.includes('duplicate key') ||
@@ -185,77 +174,47 @@ export class VendedorImportacao implements OnModuleInit {
             'duplicar valor da chave viola a restrição de unicidade',
           )
         ) {
-          const pessoaFilter = this.criarFiltroVendedor(vendedor);
+          const pessoaFilter = this.criarFiltroFormaPagamento(formaPagamento);
 
           return from(pessoaFilter.getMany()).pipe(
             switchMap((consulta) => {
               if (consulta.length > 0) {
-                vendedor.id = consulta[0].id;
-                logger.info('Salvar novamente com id ' + vendedor.id);
-
-                if (consulta[0].comissao && consulta[0].comissao.length > 0) {
-                  this.RemoverComissoes(consulta[0]).subscribe();
-                }
-
-                // Certifique-se de que os endereços estão associados corretamente
-                if (vendedor.comissao?.length > 0) {
-                  vendedor.comissao = vendedor.comissao.map((com) => {
-                    com.vendedor = vendedor; // Associa o endereço à pessoa
-                    return com;
-                  });
-                }
-
+                formaPagamento.id = consulta[0].id;
+                logger.info('Salvar novamente com id ' + formaPagamento.id);
                 // Salva novamente com a referência correta
-                return this.Salvar(vendedor);
+                return this.Salvar(formaPagamento);
               } else {
-                return of(vendedor);
+                return of(formaPagamento);
               }
             }),
           );
         }
         // Para outros erros, apenas retorna a pessoa sem alteração
-        return of(vendedor);
+        return of(formaPagamento);
       }),
     );
   }
 
-  mapearContatoParaPessoa(
-    contato: IFindResponse,
-  ): Observable<Vendedor> {
-    return from(
-      this.dataSource
-        .getRepository(Pessoa)
-        .find({
-          where: { idOriginal: contato.data.contato.id.toFixed(0) },
-          loadEagerRelations: false,
-        }),
-    ).pipe(
-      switchMap((value) => {
-        const vendedor = new Vendedor();
-        const pessoa = value[0];
-        vendedor.idOriginal = contato.data.id.toFixed(0);
-        vendedor.pessoa = pessoa;
-        vendedor.situacao = 1;
-        vendedor.comissao = [];
-        if (contato.data.comissoes && contato.data.comissoes.length > 0) {
-          contato.data.comissoes.forEach((com) => {
-            const comissao = new VendedorComissao();
-            comissao.percentualComissao = com.aliquota;
-            comissao.percentualDesconto = com.descontoMaximo;
-            vendedor.comissao.push(comissao);
-          });
-        }
-        console.log('Vendedor:', vendedor);
-        return of(vendedor);
-      }),
-    );
+  mapearFormaPagamento(
+    forma: IFindResponse,
+  ): Observable<FormaPagamento> {
+   const formaPagamento = new FormaPagamento();
+   formaPagamento.idOriginal = forma.data.id.toFixed(0);
+   formaPagamento.nome = forma.data.descricao;
+   formaPagamento.finalidade = forma.data.finalidade;
+   formaPagamento.tipoPagamento = forma.data.tipoPagamento;
+   formaPagamento.situacao = forma.data.situacao;
+   formaPagamento.bandeiraCartao = forma.data.dadosCartao ? forma.data.dadosCartao.bandeira : null;
+   formaPagamento.taxaAliquota = forma.data.taxas.aliquota;
+   formaPagamento.taxaValor = forma.data.taxas.valor;
+   return of(formaPagamento);
   }
 
-  criarFiltroVendedor(vendedor: Vendedor): SelectQueryBuilder<Vendedor> {
-    let select = this.vendedorService.repository
-      .createQueryBuilder('v')
-      .orWhere('v.id_original = :idOriginal', {
-        idOriginal: vendedor.idOriginal,
+  criarFiltroFormaPagamento(formaPagamento: FormaPagamento): SelectQueryBuilder<FormaPagamento> {
+    let select = this.formaPagamentoService.repository
+      .createQueryBuilder('f')
+      .orWhere('f.id_original = :idOriginal', {
+        idOriginal: formaPagamento.idOriginal,
       });
 
     return select;

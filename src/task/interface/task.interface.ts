@@ -145,7 +145,7 @@ export class ImportCliente implements OnModuleInit {
     else return of(null);
   }
 
-  private SalvarResposta(response: IGetResponse) {
+  SalvarResposta(response: IGetResponse) {
     return from(response.data).pipe(
       // Processa cada item serializadamente
       concatMap((item) =>
@@ -165,7 +165,7 @@ export class ImportCliente implements OnModuleInit {
     );
   }
 
-  private Salvar(pessoa: Pessoa): Observable<Pessoa> {
+  Salvar(pessoa: Pessoa): Observable<Pessoa> {
     return from(this.pessoaService.repository.save(pessoa)).pipe(
       catchError((err) => {
         logger.warn(`Erro ao persitir entidade Pessoa(DOC:${pessoa.numeroDocumento} / 
@@ -211,7 +211,7 @@ export class ImportCliente implements OnModuleInit {
     );
   }
 
-  private mapearContatoParaPessoa(contato: any): Pessoa {
+  public mapearContatoParaPessoa(contato: any): Pessoa {
     const pessoa = new Pessoa();
 
     if (contato.tipo === 'F') {
@@ -266,7 +266,7 @@ export class ImportCliente implements OnModuleInit {
     return pessoa;
   }
 
-  private criarFiltroPessoa(pessoa: Pessoa): SelectQueryBuilder<Pessoa> {
+  criarFiltroPessoa(pessoa: Pessoa): SelectQueryBuilder<Pessoa> {
     let select = this.pessoaService.repository
       .createQueryBuilder('p')
       .orWhere('p.id_original = :idOriginal', {

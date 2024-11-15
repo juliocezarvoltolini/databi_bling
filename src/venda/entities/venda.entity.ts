@@ -1,8 +1,10 @@
 import { Empresa } from "src/empresa/entities/empresa.entity";
 import { Pessoa } from "src/pessoa/entities/pesssoa.entity";
-import { Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from "typeorm";
+import { Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn } from "typeorm";
 import { VendaEstado } from "./venda.types";
 import { Vendedor } from "src/vendedor/entities/vendedor.entity";
+import { Item } from "../item/entities/item.entity";
+import { Pagamento } from "../pagamento/entities/pagamento.entity";
 
 @Entity({ name: 'venda' })
 @Index(['dataEmissao', 'estado'])
@@ -22,15 +24,25 @@ export class Venda {
     @JoinColumn({ name: 'id_pessoa', referencedColumnName: 'id' })
     pessoa: Pessoa;
     @JoinColumn({name: 'id_vendedor', referencedColumnName: 'id'})
-    @ManyToOne(() => Vendedor)
-    vendedor: number
+    @ManyToOne(() => Vendedor, vendedor => vendedor.id, {cascade: true})
+    vendedor: Vendedor
     @Column({ name: 'subtotal', type: 'numeric', precision: 14, scale: 2 })
     subtotal: number;
     @Column({ name: 'desconto_valor', type: 'numeric', precision: 14, scale: 6 })
     desconto_valor: number;
     @Column({ name: 'desconto_percentual', type: 'numeric', precision: 14, scale: 10 })
     desconto_percentual: number;
+    @Column({ name: 'outras_despesas', type: 'numeric', precision: 14, scale: 2 })
+    outrasDespesas: number;
+    @Column({ name: 'frete', type: 'numeric', precision: 14, scale: 2 })
+    frete: number;
     @Column({ name: 'total', type: 'numeric', precision: 14, scale: 2 })
     total: number;
+    @Column({name: 'id_original', type: 'varchar', length: 50, unique: true})
+    idOriginal: string;
+    @OneToMany(() => Item, item => item.venda, {cascade: true})
+    itens: Item[];
+    @OneToMany(() => Pagamento, pagamento => pagamento.venda, {cascade: true})
+    pagamentos: Pagamento[];
 
 }
