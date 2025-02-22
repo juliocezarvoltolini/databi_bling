@@ -8,7 +8,7 @@ export class Vendedor {
     @PrimaryGeneratedColumn({type: 'int4'})
     id: number;
     @JoinColumn({name: 'id_pessoa', referencedColumnName: 'id'})
-    @ManyToOne(type => Pessoa)
+    @ManyToOne(type => Pessoa, {eager: true})
     pessoa: Pessoa;
     @Column({name: 'situacao', type: 'int2'})
     situacao: Situacao;

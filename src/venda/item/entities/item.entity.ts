@@ -8,7 +8,7 @@ import { Produto } from "src/produto/entities/produto.entity";
 export class Item {
     @PrimaryGeneratedColumn({type: 'int4'})
     id: number;
-    @CreateDateColumn({type: 'timestamp', name: 'data', nullable: false})
+    @CreateDateColumn({type: 'timestamp', name: 'data', nullable: true})
     data: Date;
     @Column({name: 'situacao', type: 'char', length: 1, default: 'A', nullable: false})
     estado: EstadoItem;
@@ -26,12 +26,17 @@ export class Item {
     valor: number;
     @Column({ name: 'desconto_valor', type: 'numeric', precision: 14, scale: 6 })
     desconto_valor: number;
-    @Column({ name: 'desconto_percentual', type: 'numeric', precision: 11, scale: 10 })
+    @Column({ name: 'desconto_rateado_valor', type: 'numeric', precision: 14, scale: 6, default: 0.00 })
+    desconto_rateado_valor: number; //QUANDO LANÇA DESCONTO SOBRE A VENDA, ELE É RATEADO NESSA COLUNA
+    @Column({ name: 'desconto_percentual', type: 'numeric', precision: 14, scale: 10 })
     desconto_percentual: number;
     @Column({ name: 'total', type: 'numeric', precision: 14, scale: 2 })
     total: number;  
     @Column({name: 'id_original', type: 'varchar', length: 50, unique: true})
     idOriginal: string;
+    @Column({name: 'identificador', type: 'varchar', length: 50, nullable: true})
+    identificador: string;
+    
 
     
 }

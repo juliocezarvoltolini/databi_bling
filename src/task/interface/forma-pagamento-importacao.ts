@@ -1,222 +1,231 @@
-import { HttpService } from '@nestjs/axios';
 import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
-import { Cron, CronExpression, Interval } from '@nestjs/schedule';
 import Bling from 'bling-erp-api';
-import { IFindResponse } from 'bling-erp-api/lib/entities/formasDePagamento/interfaces/find.interface';
-import { IGetResponse } from 'bling-erp-api/lib/entities/formasDePagamento/interfaces/get.interface';
+import { IGetResponse as FormasPagamentoBling } from 'bling-erp-api/lib/entities/formasDePagamento/interfaces/get.interface';
+import { IFindResponse as FormaPagamentoBling } from 'bling-erp-api/lib/entities/formasDePagamento/interfaces/find.interface';
+
 import {
   catchError,
   concatMap,
-  firstValueFrom,
+  EMPTY,
+  forkJoin,
   from,
-  interval,
   map,
+  mergeMap,
   Observable,
   of,
   switchMap,
   tap,
   timer,
 } from 'rxjs';
-import { IUF } from 'src/common/types/uf.types';
-import { Assigned } from 'src/common/util/object/object.util';
-import { ControleImportacaoService } from 'src/controle-importacao/controle-importacao.service';
+import { AuthBlingService } from 'src/integracao/bling/auth-bling.service';
+import { DataSource, Repository } from 'typeorm';
+import { logger } from 'src/logger/winston.logger';
 import { ControleImportacao } from 'src/controle-importacao/entities/controle-importacao.entity';
 import { FormaPagamento } from 'src/forma-pagamento/entities/forma-pagamento.entity';
-import { FormaPagamentoService } from 'src/forma-pagamento/forma-pagamento.service';
-import { AuthBlingService } from 'src/integracao/bling/auth-bling.service';
-import { logger } from 'src/logger/winston.logger';
-import { Pessoa } from 'src/pessoa/entities/pesssoa.entity';
-import { VendedorComissao } from 'src/vendedor/entities/vendedor-comissao.entity';
-import { Vendedor } from 'src/vendedor/entities/vendedor.entity';
-import { VendedorService } from 'src/vendedor/vendedor.service';
-import { DataSource, QueryFailedError, SelectQueryBuilder } from 'typeorm';
+
+const REQUEST_LIMIT_MESSAGE =
+  'O limite de requisições por segundo foi atingido, tente novamente mais tarde.';
+const TIMER_DELAY_MS = 15000;
 
 @Injectable()
-export class VendedorImportacao implements OnModuleInit {
-  private blingService: Bling;
+export class FormaPagamentoImportacao implements OnModuleInit {
+  private tabela: string;
 
   constructor(
+    @Inject('DATA_SOURCE') private readonly dataSource: DataSource,
     private readonly service: AuthBlingService,
-    private readonly formaPagamentoService: FormaPagamentoService,
-    private readonly controleImportacaoService: ControleImportacaoService,
-    @Inject('DATA_SOURCE') private dataSource: DataSource,
-  ) {}
+  ) {
+    this.tabela = 'forma_pagamento';
+  }
 
   onModuleInit() {
     // this.iniciar();
   }
 
-  async iniciar() {
-    let controleImportacao: ControleImportacao;
-    this.controleImportacaoService
-      .find({ tabela: 'forma-pagamento' })
-      .pipe(
-        switchMap((consulta) => {
-          if (consulta.length > 0) {
-            controleImportacao = consulta[0];
-            console.log('Pesquisou e encontrou no banco: ', consulta);
-          } else {
-            controleImportacao = new ControleImportacao();
-            controleImportacao.tabela = 'forma-pagamento';
-            controleImportacao.pagina = 0;
-          }
+  private iniciar() {
+    let controle: ControleImportacao;
+    let blingService: Bling;
 
-          controleImportacao.pagina = controleImportacao.pagina + 1;
-          console.log('VAI PESQUISAR PÁGINA ', controleImportacao.pagina);
-          return this.execute(controleImportacao.pagina);
+    forkJoin({
+      controle: this.buscarControle(),
+      acessToken: from(this.service.getAcessToken()),
+    })
+      .pipe(
+        switchMap((values) => {
+          blingService = new Bling(values.acessToken);
+          controle = values.controle;
+          return this.processarPagina(blingService, controle);
         }),
       )
       .subscribe({
-        next: (value: FormaPagamento) => {
-          logger.info(
-            `Item processado com sucesso. ID:${value.id} - NOME: ${value.nome}`,
-          );
+        next: (value) => {
+          logger.info(`Item processado com sucesso. ID:${value.id} - NOME: ${value.descricao}`);
+          logger.info(`======================================================================`);
         },
+        complete: () => this.finalizarProcessamento(controle),
         error: (err) => {
-          if (err.name == 'zero') {
-            console.log('Todas as páginas foram consluídas.');
-          } else {
-            console.error('Erro durante o processamento:', err);
-          }
-        },
-        complete: () => {
-          console.log(
-            `Página ${controleImportacao.pagina} processada com sucesso.`,
-          );
-          this.controleImportacaoService.repository
-            .save(controleImportacao)
-            .then(
-              (ret) => this.iniciar(), // Processa a próxima página
-            );
+          console.log(err);
+          logger.error('Erro inesperado: ' + err.message);
         },
       });
   }
 
-  execute(
-    contador: number,
-    timeout: number = 1000,
-  ): Observable<FormaPagamento | FormaPagamento[]> {
-    try {
-      return from(this.service.getAcessToken()).pipe(
-        switchMap((token) => {
-          this.blingService = new Bling(token);
-          logger.info('Criou o serviço Bling.');
-
-          return timer(timeout).pipe(
-            switchMap(() => {
-              return from(
-                this.blingService.formasDePagamento.get({ pagina: contador }),
-              ).pipe(
-                switchMap((response) => {
-                  if (response.data.length > 0) {
-                    return this.SalvarResposta(response);
-                  } else {
-                    const erro = new Error(
-                      'Não há mais formas de pagamento para processar.',
-                    );
-                    erro.name = 'zero';
-                    throw erro;
-                  }
-                }),
-                catchError((err) => {
-                  if (err.name === 'zero') {
-                    throw err;
-                  } else {
-                    console.log(err);
-                    return timer(10000).pipe(
-                      switchMap(() => {
-                        return this.execute(contador);
-                      }),
-                    );
-                  }
-                }),
-              );
-            }),
-          );
-        }),
-      );
-    } catch (error) {
-      console.error('Erro durante a execução:', error);
-    }
-  }
-
-  private SalvarResposta(response: IGetResponse) {
-    return from(response.data).pipe(
-      // Processa cada item serializadamente
-      concatMap((item) =>
-        timer(500).pipe(
-          // Adiciona um atraso de 500ms entre cada item
-          switchMap(() =>
-            from(this.blingService.formasDePagamento.find({ idFormaPagamento: item.id })),
-          ),
-          switchMap((response) => {
-            console.log(response);
-            return this.mapearFormaPagamento(response).pipe(
-              switchMap((forma) => {
-                return this.Salvar(forma);
-              }),
-            );
-          }),
-        ),
+  private processarPagina(blingService: Bling, controle: ControleImportacao): Observable<any> {
+    return this.buscarPagina(controle.pagina, blingService).pipe(
+      switchMap((lista) => {
+        const itensRestantes =
+          lista.data.length > 0 ? lista.data.slice(controle.ultimoIndexProcessado + 1) : [];
+        return from(itensRestantes);
+      }),
+      concatMap((planoBling) =>
+        timer(350).pipe(switchMap(() => this.buscarESalvar(planoBling.id, blingService))),
       ),
-    );
-  }
-
-  Salvar(formaPagamento: FormaPagamento): Observable<FormaPagamento> {
-    return from(this.formaPagamentoService.repository.save(formaPagamento)).pipe(
-      catchError((err) => {
-        logger.warn(
-          `Erro ao persitir entidade FormaPagamento(NOME: ${formaPagamento.nome} / idOriginal:${formaPagamento.idOriginal}). Motivo: ${err.message}`,
-        );
-        if (
-          err.message.includes('duplicate key') ||
-          err.message.includes(
-            'duplicar valor da chave viola a restrição de unicidade',
-          )
-        ) {
-          const pessoaFilter = this.criarFiltroFormaPagamento(formaPagamento);
-
-          return from(pessoaFilter.getMany()).pipe(
-            switchMap((consulta) => {
-              if (consulta.length > 0) {
-                formaPagamento.id = consulta[0].id;
-                logger.info('Salvar novamente com id ' + formaPagamento.id);
-                // Salva novamente com a referência correta
-                return this.Salvar(formaPagamento);
-              } else {
-                return of(formaPagamento);
-              }
-            }),
-          );
-        }
-        // Para outros erros, apenas retorna a pessoa sem alteração
-        return of(formaPagamento);
+      tap(() => {
+        let index = controle.ultimoIndexProcessado + 1;
+        logger.info(`INDEX ${index}`);
+        this.atualizarControle(controle, 'index');
       }),
     );
   }
 
-  mapearFormaPagamento(
-    forma: IFindResponse,
-  ): Observable<FormaPagamento> {
-   const formaPagamento = new FormaPagamento();
-   formaPagamento.idOriginal = forma.data.id.toFixed(0);
-   formaPagamento.nome = forma.data.descricao;
-   formaPagamento.finalidade = forma.data.finalidade;
-   formaPagamento.tipoPagamento = forma.data.tipoPagamento;
-   formaPagamento.situacao = forma.data.situacao;
-   formaPagamento.bandeiraCartao = forma.data.dadosCartao ? forma.data.dadosCartao.bandeira : null;
-   formaPagamento.taxaAliquota = forma.data.taxas.aliquota;
-   formaPagamento.taxaValor = forma.data.taxas.valor;
-   return of(formaPagamento);
+  private finalizarProcessamento(controle: ControleImportacao) {
+    logger.info(`Completou a página ${controle.pagina}.`);
+    if (controle.ultimoIndexProcessado == 99) {
+      logger.info(`Próxima página.`);
+      this.atualizarControle(controle, 'pagina')
+        .pipe(map(() => this.iniciar()))
+        .subscribe();
+    } else {
+      logger.info(`Busca finalizada.`);
+    }
   }
 
-  criarFiltroFormaPagamento(formaPagamento: FormaPagamento): SelectQueryBuilder<FormaPagamento> {
-    let select = this.formaPagamentoService.repository
-      .createQueryBuilder('f')
-      .orWhere('f.id_original = :idOriginal', {
-        idOriginal: formaPagamento.idOriginal,
-      });
+  private buscarPagina(pagina: number, blingService: Bling): Observable<FormasPagamentoBling> {
+    logger.info(`Buscando página ${pagina}`);
+    return from(blingService.formasDePagamento.get({ pagina: pagina, limite: 100 })).pipe(
+      catchError((err) => {
+        if (err.message === REQUEST_LIMIT_MESSAGE) {
+          logger.info(
+            `Irá pesquisar novamente a página ${pagina}. Aguardando ${TIMER_DELAY_MS} ms`,
+          );
+          return timer(TIMER_DELAY_MS).pipe(
+            switchMap(() => this.buscarPagina(pagina, blingService)),
+          );
+        } else {
+          throw new Error(`Não foi possível pesquisar a página ${pagina}. Motivo: ${err.message} `);
+        }
+      }),
+    );
+  }
 
-    return select;
+  private buscarItem(id: number, blingService: Bling): Observable<FormaPagamentoBling> {
+    return from(blingService.formasDePagamento.find({ idFormaPagamento: id })).pipe(
+      catchError((err) => {
+        if (err.message === REQUEST_LIMIT_MESSAGE) {
+          logger.info(`Irá pesquisar novamente o item ${id}. Aguardando ${TIMER_DELAY_MS} ms`);
+          return timer(TIMER_DELAY_MS).pipe(switchMap(() => this.buscarItem(id, blingService)));
+        } else {
+          throw new Error(`Não foi possível pesquisar o id ${id}. Motivo: ${err.message} `);
+        }
+      }),
+    );
+  }
+
+  private buscarESalvar(id: number, blingService: Bling): Observable<FormaPagamento> {
+    return this.buscarItem(id, blingService).pipe(
+      switchMap((planoContaBling) => this.salvarItem(planoContaBling, blingService)),
+    );
+  }
+
+  private salvarItem(
+    modeloBling: FormaPagamentoBling,
+    blingService: Bling,
+  ): Observable<FormaPagamento> {
+    const repo = this.dataSource.getRepository(FormaPagamento);
+    logger.info(`Salvando`);
+    return this.selecionaOuAssina(repo, modeloBling).pipe(
+      mergeMap((portador) => {
+        if (portador.id) return of(portador);
+        else return from(repo.save(portador));
+      }),
+    );
+  }
+
+  private selecionaOuAssina(
+    repo: Repository<FormaPagamento>,
+    modeloBling: FormaPagamentoBling,
+  ): Observable<FormaPagamento> {
+    return from(
+      repo.findOne({
+        where: {
+          idOriginal: modeloBling.data.id.toFixed(0),
+        },
+      }),
+    ).pipe(
+      map((formaPagamento) => {
+        if (!formaPagamento) {
+          formaPagamento = new FormaPagamento();
+        }
+
+        formaPagamento.idOriginal = modeloBling.data.id.toFixed(0);
+        formaPagamento.nome = modeloBling.data.descricao;
+        formaPagamento.finalidade = modeloBling.data.finalidade;
+        formaPagamento.tipoPagamento = modeloBling.data.tipoPagamento;
+        formaPagamento.situacao = modeloBling.data.situacao;
+        formaPagamento.bandeiraCartao = modeloBling.data.dadosCartao
+          ? modeloBling.data.dadosCartao.bandeira
+          : null;
+        formaPagamento.taxaAliquota = modeloBling.data.taxas.aliquota;
+        formaPagamento.taxaValor = modeloBling.data.taxas.valor;
+        return formaPagamento;
+      }),
+    );
+  }
+
+  seleciona(idOriginal: number, blingService: Bling): Observable<FormaPagamento> {
+    if (!idOriginal) return of(null);
+    else {
+      const repo = this.dataSource.getRepository(FormaPagamento);
+      return from(repo.findOne({ where: { idOriginal: idOriginal.toFixed(0) } })).pipe(
+        switchMap((forma) => {
+          if (!forma) {
+            return timer(TIMER_DELAY_MS).pipe(
+              switchMap(() => this.buscarESalvar(idOriginal, blingService)),
+            );
+          } else return of(forma);
+        }),
+      );
+    }
+  }
+
+  private buscarControle(): Observable<ControleImportacao> {
+    const repo = this.dataSource.getRepository(ControleImportacao);
+    return from(repo.find({ where: { tabela: this.tabela } })).pipe(
+      map((consulta) => (consulta.length > 0 ? consulta[0] : this.criarNovoControle())),
+      switchMap((controle) => from(repo.save(controle))),
+    );
+  }
+
+  private criarNovoControle(): ControleImportacao {
+    const controle = new ControleImportacao();
+    controle.tabela = this.tabela;
+    controle.ultimoIndexProcessado = -1;
+    controle.pagina = 1;
+    return controle;
+  }
+
+  private atualizarControle(
+    controle: ControleImportacao,
+    paginaOuItem: 'pagina' | 'index',
+  ): Observable<ControleImportacao> {
+    const repo = this.dataSource.getRepository(ControleImportacao);
+
+    if (paginaOuItem == 'index') {
+      controle.ultimoIndexProcessado += 1;
+    } else {
+      controle.pagina += 1;
+      controle.ultimoIndexProcessado = -1;
+    }
+    return from(repo.save(controle));
   }
 }

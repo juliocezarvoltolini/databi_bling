@@ -6,7 +6,6 @@ import { PessoaModule } from './pessoa/pessoa.module';
 import { VendedorModule } from './vendedor/vendedor.module';
 import { FornecedorModule } from './fornecedor/fornecedor.module';
 import { ProdutoModule } from './produto/produto.module';
-import { FormaPagamentoModule } from './forma-pagamento/forma-pagamento.module';
 import { VendaModule } from './venda/venda.module';
 import { EmpresaModule } from './empresa/empresa.module';
 import { ConfigModule } from '@nestjs/config';
@@ -20,10 +19,28 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { HttpModule } from '@nestjs/axios';
 import { ControleImportacaoModule } from './controle-importacao/controle-importacao.module';
 import { VendedorImportacao } from './task/interface/vendedor-importacao';
+import { VendaImportacao } from './task/interface/venda-importacao';
+import { ResponseLogModule } from './response-log/response-log.module';
+import { ContaModule } from './conta/conta.module';
+import { PlanoContaImportacao } from './task/plano-conta-importacao';
+import { PortadorImportacao } from './task/portador-importacao';
+import { FormaPagamentoImportacao } from './task/interface/forma-pagamento-importacao';
+import { FormaPagamentoModule } from './forma-pagamento/forma-pagamento.module';
+import { PessoaImportacao } from './task/pessoa-importacao';
+import { ContaPagarImportacao } from './task/conta-pagar-importacao';
+import { NfeModule } from './nfe/nfe.module';
+import { NfeCategoriaImportacao } from './task/nfe-categoria-importacao';
+import { NfeImportacao } from './task/nfe-importacao';
 import { ProdutoImportacao } from './task/interface/produto-importacao';
+import { VendaNewImportacao } from './task/interface/venda-new-importacao';
+import { PagamentoImportacao } from './task/pagamento-importacao';
+import { RecebimentoImportacao } from './task/recebimento-importacao';
+import { ContaReceberImportacao } from './task/conta-receber-importacao';
+
 
 @Module({
-  imports: [DataBaseModule,
+  imports: [
+    DataBaseModule,
     HttpModule,
     PessoaModule,
     VendedorModule,
@@ -36,12 +53,32 @@ import { ProdutoImportacao } from './task/interface/produto-importacao';
     BlingModule,
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [blingConstants]
+      load: [blingConstants],
     }),
     ScheduleModule.forRoot(),
     ControleImportacaoModule,
+    ResponseLogModule,
+    ContaModule,
+    NfeModule
   ],
   controllers: [AppController],
-  providers: [AppService, Logger, ImportCliente, VendedorImportacao, ProdutoImportacao],
+  providers: [
+    AppService,
+    Logger,
+    ImportCliente,
+    VendedorImportacao,
+    ProdutoImportacao,
+    FormaPagamentoImportacao,
+    VendaNewImportacao,
+    PlanoContaImportacao,
+    PortadorImportacao,
+    PessoaImportacao,
+    ContaPagarImportacao,
+    NfeCategoriaImportacao,
+    NfeImportacao,
+    PagamentoImportacao,
+    ContaReceberImportacao,
+    RecebimentoImportacao
+  ],
 })
-export class AppModule { }
+export class AppModule {}

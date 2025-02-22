@@ -1,7 +1,9 @@
-import { BigDecimalOperationsCopy } from "./big-decimal-operations.copy";
+import { DefaultAuthentication } from "typeorm/driver/sqlserver/authentication/DefaultAuthentication";
+import { BigDecimalOperationsCopy, RoundingModes } from "./big-decimal-operations.copy";
 
-const DEFAULT_PRESISION = 4;
+const DEFAULT_PRESISION = 2;
 const DEFAULT_TRUNC_PRESISION = 0;
+
 
 export class AppMath {
 
@@ -33,6 +35,11 @@ export class AppMath {
   }
 
 
+  public static round(value: number, precision: number = DEFAULT_PRESISION, mode: RoundingModes = RoundingModes.HALF_DOWN): number {
+    return BigDecimalOperationsCopy.multiply(value, 1, precision, mode);
+  }
+
+
 
 
   /**
@@ -41,8 +48,8 @@ export class AppMath {
    * 
    * @param precision número de casas decimais após a virgula (default = 2)
    */
-  public static multiply(num1: number, num2: number, precision = DEFAULT_PRESISION) {
-    return BigDecimalOperationsCopy.multiply(num1, num2, precision);
+  public static multiply(num1: number, num2: number, precision = DEFAULT_PRESISION, mode: RoundingModes = RoundingModes.HALF_DOWN) {
+    return BigDecimalOperationsCopy.multiply(num1, num2, precision, mode);
   }
 
   /**
@@ -51,8 +58,8 @@ export class AppMath {
    * 
    * @param precision número de casas decimais após a virgula (default = 2)
    */
-  public static divide(dividend: number, divisor: number, precision = DEFAULT_PRESISION) {
-    return BigDecimalOperationsCopy.divide(dividend, divisor, precision);
+  public static divide(dividend: number, divisor: number, precision = DEFAULT_PRESISION, mode: RoundingModes = RoundingModes.HALF_DOWN) {
+    return BigDecimalOperationsCopy.divide(dividend, divisor, precision, mode);
   }
 
   /**

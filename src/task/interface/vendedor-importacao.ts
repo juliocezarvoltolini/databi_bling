@@ -1,263 +1,255 @@
-import { HttpService } from '@nestjs/axios';
 import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
-import { Cron, CronExpression, Interval } from '@nestjs/schedule';
 import Bling from 'bling-erp-api';
-import { IFindResponse } from 'bling-erp-api/lib/entities/vendedores/interfaces/find.interface';
-import { IGetResponse } from 'bling-erp-api/lib/entities/vendedores/interfaces/get.interface';
+import { IGetResponse as VendedoresBling } from 'bling-erp-api/lib/entities/vendedores/interfaces/get.interface';
+import { IFindResponse as VendedorBling } from 'bling-erp-api/lib/entities/vendedores/interfaces/find.interface';
+
 import {
   catchError,
   concatMap,
-  firstValueFrom,
+  EMPTY,
+  forkJoin,
   from,
-  interval,
   map,
+  mergeMap,
   Observable,
   of,
   switchMap,
   tap,
   timer,
 } from 'rxjs';
-import { IUF } from 'src/common/types/uf.types';
-import { Assigned } from 'src/common/util/object/object.util';
-import { ControleImportacaoService } from 'src/controle-importacao/controle-importacao.service';
 import { ControleImportacao } from 'src/controle-importacao/entities/controle-importacao.entity';
 import { AuthBlingService } from 'src/integracao/bling/auth-bling.service';
+import { DataSource, Repository } from 'typeorm';
 import { logger } from 'src/logger/winston.logger';
-import { Pessoa } from 'src/pessoa/entities/pesssoa.entity';
-import { VendedorComissao } from 'src/vendedor/entities/vendedor-comissao.entity';
 import { Vendedor } from 'src/vendedor/entities/vendedor.entity';
-import { VendedorService } from 'src/vendedor/vendedor.service';
-import { DataSource, QueryFailedError, SelectQueryBuilder } from 'typeorm';
+import { PessoaImportacao } from '../pessoa-importacao';
+import { fork } from 'child_process';
+import { VendedorComissao } from 'src/vendedor/entities/vendedor-comissao.entity';
+
+const REQUEST_LIMIT_MESSAGE =
+  'O limite de requisições por segundo foi atingido, tente novamente mais tarde.';
+const TIMER_DELAY_MS = 15000;
 
 @Injectable()
 export class VendedorImportacao implements OnModuleInit {
-  private blingService: Bling;
+  private tabela: string;
 
   constructor(
+    @Inject('DATA_SOURCE') private readonly dataSource: DataSource,
     private readonly service: AuthBlingService,
-    private readonly vendedorService: VendedorService,
-    private readonly controleImportacaoService: ControleImportacaoService,
-    @Inject('DATA_SOURCE') private dataSource: DataSource,
-  ) {}
+    private pessoaImportacao: PessoaImportacao,
+  ) {
+    this.tabela = 'vendedor';
+  }
 
   onModuleInit() {
     // this.iniciar();
   }
 
-  async iniciar() {
-    let controleImportacao: ControleImportacao;
-    this.controleImportacaoService
-      .find({ tabela: 'vendedor' })
-      .pipe(
-        switchMap((consulta) => {
-          if (consulta.length > 0) {
-            controleImportacao = consulta[0];
-            console.log('Pesquisou e encontrou no banco: ', consulta);
-          } else {
-            controleImportacao = new ControleImportacao();
-            controleImportacao.tabela = 'vendedor';
-            controleImportacao.pagina = 0;
-          }
+  private iniciar() {
+    let controle: ControleImportacao;
+    let blingService: Bling;
 
-          controleImportacao.pagina = controleImportacao.pagina + 1;
-          console.log('VAI PESQUISAR PÁGINA ', controleImportacao.pagina);
-          return this.execute(controleImportacao.pagina);
+    forkJoin({
+      controle: this.buscarControle(),
+      acessToken: from(this.service.getAcessToken()),
+    })
+      .pipe(
+        switchMap((values) => {
+          blingService = new Bling(values.acessToken);
+          controle = values.controle;
+          return this.processarPagina(blingService, controle);
         }),
       )
       .subscribe({
-        next: (value: Vendedor) => {
-          logger.info(
-            `Item processado com sucesso. ID:${value.id} - NOME: ${value.pessoa.nome}`,
-          );
+        next: (value) => {
+          logger.info(`Item processado com sucesso. ID:${value.id} - NOME: ${value.pessoa.nome}`);
+          logger.info(`======================================================================`);
         },
+        complete: () => this.finalizarProcessamento(controle),
         error: (err) => {
-          if (err.name == 'zero') {
-            console.log('Todas as páginas foram consluídas.');
-          } else {
-            console.error('Erro durante o processamento:', err);
-          }
-        },
-        complete: () => {
-          console.log(
-            `Página ${controleImportacao.pagina} processada com sucesso.`,
-          );
-          this.controleImportacaoService.repository
-            .save(controleImportacao)
-            .then(
-              (ret) => this.iniciar(), // Processa a próxima página
-            );
+          console.log(err);
+          logger.error('Erro inesperado: ' + err.message);
         },
       });
   }
 
-  execute(
-    contador: number,
-    timeout: number = 1000,
-  ): Observable<Vendedor | Vendedor[]> {
-    try {
-      return from(this.service.getAcessToken()).pipe(
-        switchMap((token) => {
-          this.blingService = new Bling(token);
-          logger.info('Criou o serviço Bling.');
+  private processarPagina(blingService: Bling, controle: ControleImportacao): Observable<Vendedor> {
+    return this.buscarPagina(controle.pagina, blingService).pipe(
+      switchMap((lista) => {
+        const itensRestantes =
+          lista.data.length > 0 ? lista.data.slice(controle.ultimoIndexProcessado + 1) : [];
+        return from(itensRestantes);
+      }),
+      concatMap((planoBling) =>
+        timer(350).pipe(switchMap(() => this.buscarESalvar(planoBling.id, blingService))),
+      ),
+      tap(() => {
+        let index = controle.ultimoIndexProcessado + 1;
+        logger.info(`INDEX ${index}`);
+        this.atualizarControle(controle, 'index');
+      }),
+    );
+  }
 
-          return timer(timeout).pipe(
-            switchMap(() => {
-              return from(
-                this.blingService.vendedores.get({ pagina: contador }),
-              ).pipe(
-                switchMap((response) => {
-                  if (response.data.length > 0) {
-                    return this.SalvarResposta(response);
-                  } else {
-                    const erro = new Error(
-                      'Não há mais contatos para processar.',
-                    );
-                    erro.name = 'zero';
-                    throw erro;
-                  }
-                }),
-                catchError((err) => {
-                  if (err.name === 'zero') {
-                    throw err;
-                  } else {
-                    console.log(err);
-                    return timer(10000).pipe(
-                      switchMap(() => {
-                        return this.execute(contador);
-                      }),
-                    );
-                  }
-                }),
-              );
-            }),
-          );
-        }),
-      );
-    } catch (error) {
-      console.error('Erro durante a execução:', error);
+  private finalizarProcessamento(controle: ControleImportacao) {
+    logger.info(`Completou a página ${controle.pagina}.`);
+    if (controle.ultimoIndexProcessado == 99) {
+      logger.info(`Próxima página.`);
+      this.atualizarControle(controle, 'pagina')
+        .pipe(map(() => this.iniciar()))
+        .subscribe();
+    } else {
+      logger.info(`Busca finalizada.`);
     }
   }
 
-  RemoverComissoes(vendedor: Vendedor): Observable<any> {
-    let comissoes = vendedor.comissao.map((end) => {
-      return end.id;
-    });
-    if (comissoes.length > 0)
-      return from(
-        this.dataSource.manager
-          .getRepository(VendedorComissao)
-          .delete(comissoes),
-      );
-    else return of(null);
-  }
-
-  private SalvarResposta(response: IGetResponse) {
-    return from(response.data).pipe(
-      // Processa cada item serializadamente
-      concatMap((item) =>
-        timer(500).pipe(
-          // Adiciona um atraso de 500ms entre cada item
-          switchMap(() =>
-            from(this.blingService.vendedores.find({ idVendedor: item.id })),
-          ),
-          switchMap((response) => {
-            console.log(response);
-            return this.mapearContatoParaPessoa(response).pipe(
-              switchMap((vendedor) => {
-                return this.Salvar(vendedor);
-              }),
-            );
-          }),
-        ),
-      ),
-    );
-  }
-
-  Salvar(vendedor: Vendedor): Observable<Vendedor> {
-    return from(this.vendedorService.repository.save(vendedor)).pipe(
+  private buscarPagina(pagina: number, blingService: Bling): Observable<VendedoresBling> {
+    logger.info(`Buscando página ${pagina}`);
+    return from(blingService.vendedores.get({ pagina: pagina, limite: 100 })).pipe(
       catchError((err) => {
-        logger.warn(
-          `Erro ao persitir entidade Vendedor(NOME: ${vendedor?.pessoa.nome} / idOriginal:${vendedor.idOriginal}). Motivo: ${err.message}`,
-        );
-        if (
-          err.message.includes('duplicate key') ||
-          err.message.includes(
-            'duplicar valor da chave viola a restrição de unicidade',
-          )
-        ) {
-          const pessoaFilter = this.criarFiltroVendedor(vendedor);
-
-          return from(pessoaFilter.getMany()).pipe(
-            switchMap((consulta) => {
-              if (consulta.length > 0) {
-                vendedor.id = consulta[0].id;
-                logger.info('Salvar novamente com id ' + vendedor.id);
-
-                if (consulta[0].comissao && consulta[0].comissao.length > 0) {
-                  this.RemoverComissoes(consulta[0]).subscribe();
-                }
-
-                // Certifique-se de que os endereços estão associados corretamente
-                if (vendedor.comissao?.length > 0) {
-                  vendedor.comissao = vendedor.comissao.map((com) => {
-                    com.vendedor = vendedor; // Associa o endereço à pessoa
-                    return com;
-                  });
-                }
-
-                // Salva novamente com a referência correta
-                return this.Salvar(vendedor);
-              } else {
-                return of(vendedor);
-              }
-            }),
+        if (err.message === REQUEST_LIMIT_MESSAGE) {
+          logger.info(
+            `Irá pesquisar novamente a página ${pagina}. Aguardando ${TIMER_DELAY_MS} ms`,
           );
+          return timer(TIMER_DELAY_MS).pipe(
+            switchMap(() => this.buscarPagina(pagina, blingService)),
+          );
+        } else {
+          throw new Error(`Não foi possível pesquisar a página ${pagina}. Motivo: ${err.message} `);
         }
-        // Para outros erros, apenas retorna a pessoa sem alteração
-        return of(vendedor);
       }),
     );
   }
 
-  mapearContatoParaPessoa(
-    contato: IFindResponse,
+  private buscarItem(id: number, blingService: Bling): Observable<VendedorBling> {
+    return from(blingService.vendedores.find({ idVendedor: id })).pipe(
+      catchError((err) => {
+        if (err.message === REQUEST_LIMIT_MESSAGE) {
+          logger.info(`Irá pesquisar novamente o item ${id}. Aguardando ${TIMER_DELAY_MS} ms`);
+          return timer(TIMER_DELAY_MS).pipe(switchMap(() => this.buscarItem(id, blingService)));
+        } else {
+          throw new Error(`Não foi possível pesquisar o id ${id}. Motivo: ${err.message} `);
+        }
+      }),
+    );
+  }
+
+  private buscarESalvar(id: number, blingService: Bling): Observable<Vendedor> {
+    return this.buscarItem(id, blingService).pipe(
+      switchMap((planoContaBling) => this.salvarItem(planoContaBling, blingService)),
+    );
+  }
+
+  private salvarItem(modeloBling: VendedorBling, blingService: Bling): Observable<Vendedor> {
+    const repo = this.dataSource.getRepository(Vendedor);
+    logger.info(`Salvando`);
+    return this.selecionaOuAssina(repo, modeloBling, blingService).pipe(
+      switchMap((vendedor) => {
+        if (vendedor.id) return of(vendedor);
+        else return from(repo.save(vendedor));
+      }),
+    );
+  }
+
+  private selecionaOuAssina(
+    repo: Repository<Vendedor>,
+    modeloBling: VendedorBling,
+    blingService: Bling,
   ): Observable<Vendedor> {
     return from(
-      this.dataSource
-        .getRepository(Pessoa)
-        .find({
-          where: { idOriginal: contato.data.contato.id.toFixed(0) },
-          loadEagerRelations: false,
-        }),
+      repo.find({
+        where: {
+          idOriginal: modeloBling.data.id.toFixed(0),
+        },
+      }),
     ).pipe(
-      switchMap((value) => {
-        const vendedor = new Vendedor();
-        const pessoa = value[0];
-        vendedor.idOriginal = contato.data.id.toFixed(0);
-        vendedor.pessoa = pessoa;
-        vendedor.situacao = 1;
-        vendedor.comissao = [];
-        if (contato.data.comissoes && contato.data.comissoes.length > 0) {
-          contato.data.comissoes.forEach((com) => {
-            const comissao = new VendedorComissao();
-            comissao.percentualComissao = com.aliquota;
-            comissao.percentualDesconto = com.descontoMaximo;
-            vendedor.comissao.push(comissao);
-          });
+      switchMap((consulta) => {
+        if (consulta.length > 0) {
+          logger.info('Encontrou o vendedor')
+          return of(consulta[0]);
+        } else {
+          return this.criarVendedor(modeloBling, blingService);
         }
-        console.log('Vendedor:', vendedor);
-        return of(vendedor);
       }),
     );
   }
 
-  criarFiltroVendedor(vendedor: Vendedor): SelectQueryBuilder<Vendedor> {
-    let select = this.vendedorService.repository
-      .createQueryBuilder('v')
-      .orWhere('v.id_original = :idOriginal', {
-        idOriginal: vendedor.idOriginal,
-      });
+  private criarVendedor(modeloBling: VendedorBling, blingService: Bling): Observable<Vendedor> {
+    let repo = this.dataSource.getRepository(Vendedor);
+    return forkJoin({
+      pessoa: this.pessoaImportacao.seleciona(modeloBling.data.contato.id, blingService),
+      vendedor: from(repo.findOne({ where: { idOriginal: modeloBling.data.id.toFixed(0) } })),
+    }).pipe(
+      switchMap((values) => {
+        if (!values.vendedor) {
+          values.vendedor = new Vendedor();
+          values.vendedor.pessoa = values.pessoa;
+          values.vendedor.idOriginal = modeloBling.data.id.toFixed(0);
+        }
 
-    return select;
+        if (!values.vendedor.comissao) values.vendedor.comissao = [];
+
+        if (modeloBling.data.comissoes.length > 0) {
+          if (values.vendedor.comissao.length === 0) {
+            values.vendedor.comissao.push(new VendedorComissao());
+          }
+          values.vendedor.comissao[0].percentualComissao = modeloBling.data.comissoes[0].aliquota;
+          values.vendedor.comissao[0].percentualDesconto =
+            modeloBling.data.comissoes[0].descontoMaximo;
+        }
+
+        values.vendedor.situacao = 1
+
+        return of(values.vendedor);
+      }),
+    );
+  }
+
+  seleciona(idOriginal: number, blingService: Bling): Observable<Vendedor> {
+    if (!idOriginal) return of(null);
+    else {
+      const repo = this.dataSource.getRepository(Vendedor);
+      return from(repo.findOne({ where: { idOriginal: idOriginal.toFixed(0) } })).pipe(
+        switchMap((planoConta) => {
+          if (!planoConta) {
+            return timer(TIMER_DELAY_MS).pipe(
+              switchMap(() => this.buscarESalvar(idOriginal, blingService)),
+            );
+          } else return of(planoConta);
+        }),
+      );
+    }
+  }
+
+  private buscarControle(): Observable<ControleImportacao> {
+    const repo = this.dataSource.getRepository(ControleImportacao);
+    return from(repo.find({ where: { tabela: this.tabela } })).pipe(
+      map((consulta) => (consulta.length > 0 ? consulta[0] : this.criarNovoControle())),
+      switchMap((controle) => from(repo.save(controle))),
+    );
+  }
+
+  private criarNovoControle(): ControleImportacao {
+    const controle = new ControleImportacao();
+    controle.tabela = this.tabela;
+    controle.ultimoIndexProcessado = -1;
+    controle.pagina = 1;
+    return controle;
+  }
+
+  private atualizarControle(
+    controle: ControleImportacao,
+    paginaOuItem: 'pagina' | 'index',
+  ): Observable<ControleImportacao> {
+    const repo = this.dataSource.getRepository(ControleImportacao);
+
+    if (paginaOuItem == 'index') {
+      controle.ultimoIndexProcessado += 1;
+    } else {
+      controle.pagina += 1;
+      controle.ultimoIndexProcessado = -1;
+    }
+    return from(repo.save(controle));
   }
 }

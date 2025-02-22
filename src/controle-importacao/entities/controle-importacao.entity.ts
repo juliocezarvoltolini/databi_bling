@@ -10,6 +10,6 @@ export class ControleImportacao {
     pagina: number;
     @Column({name: 'ultimo_index_processado', type: 'int2', nullable: true})
     ultimoIndexProcessado: number;
-    @Column({name: 'data', type: 'date', nullable: true})
+    @Column({name: 'data', type: 'date', nullable: true, update: true})
     data: Date;
 }

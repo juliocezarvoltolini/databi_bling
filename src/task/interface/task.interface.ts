@@ -2,6 +2,7 @@ import { HttpService } from '@nestjs/axios';
 import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
 import { Cron, CronExpression, Interval } from '@nestjs/schedule';
 import Bling from 'bling-erp-api';
+import { IFindResponse } from 'bling-erp-api/lib/entities/contatos/interfaces/find.interface';
 import { IGetResponse } from 'bling-erp-api/lib/entities/contatos/interfaces/get.interface';
 import {
   catchError,
@@ -155,7 +156,7 @@ export class ImportCliente implements OnModuleInit {
             from(this.blingService.contatos.find({ idContato: item.id })),
           ),
           switchMap((response) => {
-            const contato = response.data;
+            const contato = response;
             const pessoa = this.mapearContatoParaPessoa(contato);
 
             return this.Salvar(pessoa);
@@ -211,52 +212,49 @@ export class ImportCliente implements OnModuleInit {
     );
   }
 
-  public mapearContatoParaPessoa(contato: any): Pessoa {
+  public mapearContatoParaPessoa(contato: IFindResponse): Pessoa {
     const pessoa = new Pessoa();
 
-    if (contato.tipo === 'F') {
+    if (contato.data.tipo === 'F') {
       pessoa.tipoPessoa = 'F';
-      pessoa.sexo = contato?.dadosAdicionais.sexo;
-      if (contato.dadosAdicionais.dataNascimento !== '0000-00-00') {
-        const partes = contato?.dadosAdicionais.dataNascimento.split('-');
+      pessoa.sexo = contato.data?.dadosAdicionais.sexo;
+      if (contato.data.dadosAdicionais.dataNascimento !== '0000-00-00') {
+        const partes = contato.data?.dadosAdicionais.dataNascimento.split('-');
         pessoa.dataNascimento = new Date(
           parseInt(partes[0]),
           parseInt(partes[1]) - 1,
           parseInt(partes[2]),
         );
       }
-      pessoa.naturalidade = contato?.dadosAdicionais.naturalidade;
+      pessoa.naturalidade = contato.data?.dadosAdicionais.naturalidade;
     } else {
       pessoa.tipoPessoa = 'J';
     }
 
-    pessoa.idOriginal = contato.id + '';
-    pessoa.nome = contato.nome;
-    pessoa.fantasia = contato.fantasia;
-    pessoa.inscricaoEstadual = contato.ie;
-    pessoa.indicadorInscricaoEstadual = contato.indicadorIe;
-    pessoa.numeroDocumento = contato.numeroDocumento;
-    pessoa.numeroDocumento =
-      pessoa.numeroDocumento.length == 0 ? null : pessoa.numeroDocumento;
-    pessoa.rg = contato.rg;
-    pessoa.rg = pessoa.rg.length === 0 ? null : pessoa.rg;
-    pessoa.email = contato.email;
-    pessoa.orgaoEmissor = contato.orgaoEmissor;
-    pessoa.situacao = contato.situacao === 'A' ? 1 : 0;
-    const cep = (contato.endereco.geral.cep as string)
+    pessoa.idOriginal = contato.data.id + '';
+    pessoa.nome = contato.data.nome;
+    pessoa.fantasia = contato.data.fantasia;
+    pessoa.inscricaoEstadual = contato.data.ie;
+    pessoa.indicadorInscricaoEstadual = contato.data.indicadorIe;
+    pessoa.numeroDocumento = contato.data.numeroDocumento.length === 0 ? null : contato.data.numeroDocumento;
+    pessoa.rg = contato.data.rg = contato.data.rg.length === 0 ? null : contato.data.rg;
+    pessoa.email = contato.data.email;
+    pessoa.orgaoEmissor = contato.data.orgaoEmissor;
+    pessoa.situacao = contato.data.situacao === 'A' ? 1 : 0;
+    const cep = (contato.data.endereco.geral.cep as string)
       .replace(/\D/g, '')
       .trim();
-    const municipio = (contato.endereco.geral.municipio as string).trim();
-    const uf = (contato.endereco.geral.uf as string).trim();
+    const municipio = (contato.data.endereco.geral.municipio as string).trim();
+    const uf = (contato.data.endereco.geral.uf as string).trim();
 
     if (municipio.length > 0 && uf.length > 0) {
       const endereco = new PessoaEndereco();
       endereco.cep = cep;
-      endereco.bairro = contato.endereco.geral.bairro;
+      endereco.bairro = contato.data.endereco.geral.bairro;
       endereco.municipio = municipio;
       endereco.uf = uf as IUF;
-      endereco.complemento = contato.endereco.geral.complemento;
-      endereco.numero = contato.endereco.geral.numero;
+      endereco.complemento = contato.data.endereco.geral.complemento;
+      endereco.numero = contato.data.endereco.geral.numero;
 
       pessoa.enderecos = [endereco];
     } else {

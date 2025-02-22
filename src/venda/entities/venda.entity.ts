@@ -4,7 +4,7 @@ import { Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, OneToMa
 import { VendaEstado } from "./venda.types";
 import { Vendedor } from "src/vendedor/entities/vendedor.entity";
 import { Item } from "../item/entities/item.entity";
-import { Pagamento } from "../pagamento/entities/pagamento.entity";
+import { VendaPagamento } from "../pagamento/entities/venda-pagamento.entity";
 
 @Entity({ name: 'venda' })
 @Index(['dataEmissao', 'estado'])
@@ -26,10 +26,12 @@ export class Venda {
     @JoinColumn({name: 'id_vendedor', referencedColumnName: 'id'})
     @ManyToOne(() => Vendedor, vendedor => vendedor.id, {cascade: true})
     vendedor: Vendedor
-    @Column({ name: 'subtotal', type: 'numeric', precision: 14, scale: 2 })
-    subtotal: number;
+    @Column({ name: 'subtotal_produtos', type: 'numeric', precision: 14, scale: 2 })
+    subtotalProdutos: number;
     @Column({ name: 'desconto_valor', type: 'numeric', precision: 14, scale: 6 })
     desconto_valor: number;
+    @Column({ name: 'desconto_rateado_valor', type: 'numeric', precision: 14, scale: 6, default: 0.00 })
+    desconto_rateado_valor: number;
     @Column({ name: 'desconto_percentual', type: 'numeric', precision: 14, scale: 10 })
     desconto_percentual: number;
     @Column({ name: 'outras_despesas', type: 'numeric', precision: 14, scale: 2 })
@@ -40,9 +42,11 @@ export class Venda {
     total: number;
     @Column({name: 'id_original', type: 'varchar', length: 50, unique: true})
     idOriginal: string;
-    @OneToMany(() => Item, item => item.venda, {cascade: true})
+    @OneToMany(() => Item, item => item.venda, {cascade: true, eager: true, onUpdate: 'CASCADE', onDelete: 'CASCADE'})
     itens: Item[];
-    @OneToMany(() => Pagamento, pagamento => pagamento.venda, {cascade: true})
-    pagamentos: Pagamento[];
+    @OneToMany(() => VendaPagamento, pagamento => pagamento.venda, {cascade: true, eager: true})
+    pagamentos: VendaPagamento[];
+    @Column({name: 'identificador', type: 'varchar', length: 50, nullable: true})
+    identificador: string;
 
 }

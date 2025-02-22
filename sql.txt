@@ -1,0 +1,2 @@
+select pg_to_ts_type(data_type), column_name, concat('@Column({ name: ''', "column_name", ''', type: ''', data_type, '''', case when data_type = 'numeric' then ', precision: ' || numeric_precision || ', scale: ' || numeric_scale when data_type = 'character varying' then ', length: ' || character_maximum_length end, case when column_default is not null then ', default: ' || column_default end, '})', 
+chr(10), "column_name" , ': ', pg_to_ts_type(data_type), ';'), * from information_schema.columns where "table_name" = 'empresas' and "column_name" like '%multa%'

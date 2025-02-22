@@ -17,7 +17,7 @@ export class Pessoa {
     @Column({ name: "nome", type: "varchar", length: 200, nullable: false })
     nome: string;
 
-    @Column({ name: "numero_documento", type: "varchar", length: 14, unique: true, nullable: true })
+    @Column({ name: "numero_documento", type: "varchar", length: 14, nullable: true })
     numeroDocumento: string; // CPF ou CNPJ
 
     @Column({ type: 'varchar', length: 150, nullable: true})
@@ -41,7 +41,7 @@ export class Pessoa {
     @Column({name: 'situacao', type: 'int2', default: 1, nullable: false})
     situacao: Situacao;
 
-    @Column({ type: 'date', nullable: true })
+    @Column({ name:'data_nascimento', type: 'date', nullable: true })
     dataNascimento: Date;
 
     @Column({ type: 'varchar', length: 1, nullable: true})
@@ -50,11 +50,14 @@ export class Pessoa {
     @Column({nullable: true})
     naturalidade: string;
 
-    @Column({ type: 'date', nullable: true })
+    @Column({ name:'data_fundacao', type: 'date', nullable: true })
     dataFundacao: Date;
 
     @OneToMany(() => PessoaEndereco, endereco => endereco.pessoa, {cascade: true, eager: true})
     enderecos: PessoaEndereco[];
+
+    @Column({name: 'identificador', type: 'varchar', length: 50, nullable: true})
+    identificador: string;
 
 }
 

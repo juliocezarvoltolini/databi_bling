@@ -1,375 +1,237 @@
-import { HttpService } from '@nestjs/axios';
 import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
-import { Cron, CronExpression, Interval } from '@nestjs/schedule';
 import Bling from 'bling-erp-api';
-import { IFindResponse } from 'bling-erp-api/lib/entities/produtos/interfaces/find.interface';
-import { IGetResponse } from 'bling-erp-api/lib/entities/produtos/interfaces/get.interface';
+import { IGetResponse as ProdutosBling } from 'bling-erp-api/lib/entities/produtos/interfaces/get.interface';
+import { IFindResponse as ProdutoBling } from 'bling-erp-api/lib/entities/produtos/interfaces/find.interface';
+
 import {
   catchError,
   concatMap,
-  firstValueFrom,
+  EMPTY,
   forkJoin,
   from,
-  interval,
   map,
   mergeMap,
   Observable,
   of,
-  reduce,
   switchMap,
   tap,
-  throwError,
   timer,
   toArray,
 } from 'rxjs';
-import { IUF } from 'src/common/types/uf.types';
-import { Assigned } from 'src/common/util/object/object.util';
-import { ControleImportacaoService } from 'src/controle-importacao/controle-importacao.service';
 import { ControleImportacao } from 'src/controle-importacao/entities/controle-importacao.entity';
-import { Fornecedor } from 'src/fornecedor/entities/fornecedor.entity';
 import { AuthBlingService } from 'src/integracao/bling/auth-bling.service';
+import { DataSource, Repository } from 'typeorm';
+
 import { logger } from 'src/logger/winston.logger';
-import { Pessoa } from 'src/pessoa/entities/pesssoa.entity';
+import { Produto } from 'src/produto/entities/produto.entity';
+import { fork } from 'child_process';
+import { PessoaImportacao } from '../pessoa-importacao';
 import {
   ProdutoCategoria,
   ProdutoCategoriaOpcao,
   ProdutoCategoriaRelacao,
 } from 'src/produto/entities/produto-categoria.entity';
-import { Produto } from 'src/produto/entities/produto.entity';
-import { ProdutoService } from 'src/produto/produto.service';
-import { VendedorComissao } from 'src/vendedor/entities/vendedor-comissao.entity';
-import { DataSource, QueryFailedError, Repository, SelectQueryBuilder } from 'typeorm';
+import { ProdutoCategoriaTipo } from 'src/produto/entities/produto.types';
+import { ResponseLog } from 'src/response-log/entities/response-log.entity';
+
+const REQUEST_LIMIT_MESSAGE =
+  'O limite de requisições por segundo foi atingido, tente novamente mais tarde.';
+const TIMER_DELAY_MS = 15000;
 
 @Injectable()
 export class ProdutoImportacao implements OnModuleInit {
-  private blingService: Bling;
+  private tabela: string;
 
   constructor(
+    @Inject('DATA_SOURCE') private readonly dataSource: DataSource,
     private readonly service: AuthBlingService,
-    private readonly produtoService: ProdutoService,
-    private readonly controleImportacaoService: ControleImportacaoService,
-    @Inject('DATA_SOURCE') private dataSource: DataSource,
-  ) {}
+    private pessoaImportacao: PessoaImportacao,
+  ) {
+    this.tabela = 'produto';
+  }
 
   onModuleInit() {
     // this.iniciar();
   }
 
-  async iniciar() {
-    let controleImportacao: ControleImportacao;
-    this.controleImportacaoService
-      .find({ tabela: 'produto' })
-      .pipe(
-        switchMap((consulta) => {
-          if (consulta.length > 0) {
-            controleImportacao = consulta[0];
-            console.log('Pesquisou e encontrou no banco: ', consulta);
-          } else {
-            controleImportacao = new ControleImportacao();
-            controleImportacao.tabela = 'produto';
-            controleImportacao.pagina = 0;
-            controleImportacao.ultimoIndexProcessado = -1;
-          }
+  private iniciar() {
+    let controle: ControleImportacao;
+    let blingService: Bling;
 
-          controleImportacao.pagina = controleImportacao.pagina + 1;
-          console.log('VAI PESQUISAR PÁGINA ', controleImportacao.pagina);
-          return this.execute(controleImportacao);
+    forkJoin({
+      controle: this.buscarControle(),
+      acessToken: from(this.service.getAcessToken()),
+    })
+      .pipe(
+        switchMap((values) => {
+          blingService = new Bling(values.acessToken);
+          controle = values.controle;
+          return this.processarPagina(blingService, controle);
         }),
       )
       .subscribe({
-        next: (value: Produto) => {
-          logger.info(`Item processado com sucesso. ID:${value.id} - NOME: ${value.descricao}`);
-        },
-        error: (err) => {
-          if (err.name == 'zero') {
-            console.log('Todas as páginas foram concluídas.');
-          } else {
-            console.error('Erro durante o processamento:', err);
-          }
-        },
-        complete: () => {
-          controleImportacao.ultimoIndexProcessado = -1;
-          console.log(`Página ${controleImportacao.pagina} processada com sucesso.`);
-          this.controleImportacaoService.repository.save(controleImportacao).then(
-            (ret) => this.iniciar(), // Processa a próxima página
+        next: (value) => {
+          logger.info(
+            `[ProdutoImportacao] ${this.tabela.toUpperCase()} processado com sucesso. 
+            - ID: ${value.id} 
+            - ID ORIGINAL: ${value.idOriginal}
+            - NOME: ${value.descricao}
+            - FORMATO: ${value.formato}`,
           );
+          logger.info(`======================================================================`);
+        },
+        complete: () => this.finalizarProcessamento(controle),
+        error: (err) => {
+          console.log(err);
+          logger.error('[ProdutoImportacao] Erro inesperado: ' + err.message);
         },
       });
   }
 
-  execute(contador: ControleImportacao, timeout: number = 1000): Observable<Produto | Produto[]> {
-    try {
-      return from(this.service.getAcessToken()).pipe(
-        switchMap((token) => {
-          this.blingService = new Bling(token);
-          logger.info('Criou o serviço Bling.');
+  private processarPagina(blingService: Bling, controle: ControleImportacao): Observable<Produto> {
+    return this.buscarPagina(controle.pagina, blingService).pipe(
+      switchMap((lista) => {
+        const itensRestantes =
+          lista.data.length > 0 ? lista.data.slice(controle.ultimoIndexProcessado + 1) : [];
+        return from(itensRestantes);
+      }),
+      concatMap((planoBling) =>
+        timer(350).pipe(switchMap(() => this.buscarESalvar(planoBling.id, blingService))),
+      ),
+      tap(() => {
+        let index = controle.ultimoIndexProcessado + 1;
+        logger.info(`INDEX ${index}`);
+        this.atualizarControle(controle, 'index');
+      }),
+    );
+  }
 
-          return timer(timeout).pipe(
-            switchMap(() => {
-              return from(
-                this.blingService.produtos.get({
-                  pagina: contador.pagina,
-                }),
-              ).pipe(
-                switchMap((response) => {
-                  if (response.data.length > 0) {
-                    return this.SalvarResposta(response, contador);
-                  } else {
-                    const erro = new Error('Não há mais contatos para processar.');
-                    erro.name = 'zero';
-                    return throwError(() => erro);
-                  }
-                }),
-                catchError((err) => {
-                  if (err.name === 'zero') {
-                    return throwError(() => err);
-                  } else {
-                    console.log('===============', err);
-                    return timer(15000).pipe(
-                      switchMap(() => {
-                        return this.execute(contador);
-                      }),
-                    );
-                  }
-                }),
-              );
-            }),
-          );
-        }),
-      );
-    } catch (error) {
-      console.error('Erro durante a execução:', error);
+  private finalizarProcessamento(controle: ControleImportacao) {
+    logger.info(`[ProdutoImportacao] Completou a página ${controle.pagina}.`);
+    if (controle.ultimoIndexProcessado == 99) {
+      logger.info(`[ProdutoImportacao] Próxima página.`);
+      this.atualizarControle(controle, 'pagina')
+        .pipe(map(() => this.iniciar()))
+        .subscribe();
+    } else {
+      logger.info(`[ProdutoImportacao] Busca finalizada.`);
     }
   }
 
-  private RemoverCategorias(produto: Produto): Observable<any> {
-    return from(
-      this.dataSource
-        .getRepository(ProdutoCategoriaRelacao)
-        .createQueryBuilder('r')
-        .delete()
-        .where('r.id_produto = :id_produto', { id_produto: produto.id })
-        .execute(),
-    );
-  }
-
-  private SalvarResposta(
-    response: IGetResponse,
-    controleImportacao: ControleImportacao,
-  ): Observable<Produto> {
-    const itensRestantes = response.data.slice(controleImportacao.ultimoIndexProcessado + 1);
-    return from(itensRestantes).pipe(
-      // Processa cada item serializadamente
-      concatMap((item) =>
-        timer(1000).pipe(
-          // Adiciona um atraso de 1000ms entre cada item
-          switchMap(() => this.getProdutoFromAPI(item.id)),
-          switchMap((produtoCompleto) => {
-            console.log('11111111');
-            return this.mapearProduto(produtoCompleto).pipe(
-              switchMap((produto) => {
-                return this.Salvar(produto).pipe(
-                  tap((value) => {
-                    this.AtualizarContadorRegistroProcessado(controleImportacao);
-                  }),
-                );
-              }),
-            );
-          }),
-        ),
-      ),
-    );
-  }
-
-  private AtualizarContadorRegistroProcessado(controleImportacao: ControleImportacao) {
-    controleImportacao.ultimoIndexProcessado++;
-
-    this.controleImportacaoService.repository
-      .createQueryBuilder('c')
-      .update()
-      .set({
-        ultimoIndexProcessado: () => 'ultimo_index_processado + 1',
-      })
-      .where('tabela = :tabela', {
-        tabela: controleImportacao.tabela,
-      })
-      .execute();
-  }
-
-  private getProdutoFromAPI(id: number): Observable<IFindResponse> {
-    return from(this.blingService.produtos.find({ idProduto: id })).pipe(
-      catchError((value) => {
-        if (
-          value.message ===
-          'O limite de requisições por segundo foi atingido, tente novamente mais tarde.'
-        ) {
-          logger.info('Vai tentar novamente em 30 segundos');
-          return timer(15000).pipe(switchMap(() => this.getProdutoFromAPI(id)));
-        } else {
-          throw value;
-        }
-      }),
-    );
-  }
-
-  private Salvar(produto: Produto): Observable<Produto> {
-    return from(this.produtoService.repository.save(produto)).pipe(
+  private buscarPagina(pagina: number, blingService: Bling): Observable<ProdutosBling> {
+    logger.info(`[ProdutoImportacao] Buscando página ${pagina}`);
+    return from(blingService.produtos.get({ pagina: pagina, limite: 100 })).pipe(
       catchError((err) => {
-        logger.warn(
-          `Erro ao persitir entidade Vendedor(NOME: ${produto?.descricao} / idOriginal:${produto.idOriginal}). Motivo: ${err.message}`,
-        );
-        if (
-          err.message.includes('duplicate key') ||
-          err.message.includes('duplicar valor da chave viola a restrição de unicidade')
-        ) {
-          const pessoaFilter = this.criarFiltroPessoa(produto);
-
-          return from(pessoaFilter.getMany()).pipe(
-            switchMap((consulta) => {
-              if (consulta.length > 0) {
-                produto.id = consulta[0].id;
-                logger.info('Salvar novamente com id ' + produto.id);
-
-                if (consulta[0].categoriasOpcao && consulta[0].categoriasOpcao.length > 0) {
-                  this.RemoverCategorias(consulta[0]).pipe(
-                    switchMap(() => {
-                      return this.Salvar(produto);
-                    }),
-                  );
-                } // Salva novamente com a referência correta
-                else return this.Salvar(produto);
-              } else {
-                return of(produto);
-              }
-            }),
+        if (err.message === REQUEST_LIMIT_MESSAGE) {
+          logger.info(
+            `[ProdutoImportacao] Irá pesquisar novamente a página ${pagina}. Aguardando ${TIMER_DELAY_MS} ms`,
           );
-        }
-        // Para outros erros, apenas retorna a pessoa sem alteração
-        return of(produto);
-      }),
-    );
-  }
-
-  private mapearProduto(response: IFindResponse): Observable<Produto> {
-    const res = response.data;
-
-    return forkJoin({
-      fornecedor:
-        response.data.fornecedor.contato.id > 0
-          ? this.salvarFornecedor(response.data.fornecedor.contato.id)
-          : of(null),
-      variacao: response?.data.variacao
-        ? this.salvarVariacao(response.data.variacao.nome)
-        : of(null),
-    }).pipe(
-      switchMap((values) => {
-        const produto = new Produto();
-        produto.idOriginal = res.id.toFixed(0);
-        produto.descricao = res.nome;
-        produto.descricaoCurta = res.descricaoCurta ?? '';
-        produto.formato = res.formato;
-        produto.fornecedor = values.fornecedor;
-        produto.gtin = res.gtin;
-        produto.gtinEmbalagem = res.gtinEmbalagem;
-        produto.situacao = res.situacao === 'A' ? 1 : 0;
-        produto.observacoes = res.observacoes;
-        produto.urlImagem = res.imagemURL ?? '';
-        produto.valorCusto = res.fornecedor ? res.fornecedor.precoCusto : 0;
-        produto.valorPreco = res.preco;
-
-        if (values.variacao && values.variacao.length > 0) {
-          produto.categoriasOpcao = [];
-          produto.categoriasOpcao.push(
-            ...values.variacao.map((opcao) => {
-              const relacao = new ProdutoCategoriaRelacao();
-              relacao.produtoCategoriaOpcao = opcao;
-              return relacao;
-            }),
+          return timer(TIMER_DELAY_MS).pipe(
+            switchMap(() => this.buscarPagina(pagina, blingService)),
           );
-        }
-
-        if (res.variacao && res.variacao.produtoPai.id > 0) {
-          logger.info('Irá pesquisar o pai.');
-          return from(
-            this.dataSource.getRepository(Produto).find({
-              where: { idOriginal: res.variacao.produtoPai.id.toFixed(0) },
-              loadEagerRelations: false,
-            }),
-          )
-            .pipe(
-              switchMap((consulta) => {
-                if (consulta.length > 0) {
-                  return of(consulta[0]);
-                } else {
-                  return timer(500)
-                    .pipe(
-                      switchMap(() => {
-                        return this.getProdutoFromAPI(res.variacao.produtoPai.id);
-                      }),
-                    )
-                    .pipe(
-                      switchMap((response) => {
-                        return this.mapearProduto(response).pipe(
-                          switchMap((prod) => {
-                            return this.Salvar(prod);
-                          }),
-                        );
-                      }),
-                    );
-                }
-              }),
-            )
-            .pipe(
-              map((prod) => {
-                produto.produtoPai = prod;
-                return produto;
-              }),
-            );
         } else {
-          return of(produto);
+          throw new Error(
+            `[ProdutoImportacao] Não foi possível pesquisar a página ${pagina}. Motivo: ${err.message} `,
+          );
         }
       }),
     );
   }
 
-  private salvarVariacao(variacao: string): Observable<ProdutoCategoriaOpcao[]> {
-    const nomes: string[] = [];
-    const valores: string[] = [];
-
-    variacao.split(';').forEach((value) => {
-      const [nome, valor] = value.split(':');
-      if (nome && valor) {
-        nomes.push(nome);
-        valores.push(valor);
-      }
-    });
-
-    const repoCategoria = this.dataSource.getRepository(ProdutoCategoria);
-    console.log('33333333');
-
-    return from(nomes).pipe(
-      mergeMap((nome, index) => {
-        return this.SalvarCategoriaOpcao(repoCategoria, nome, valores[index]);
+  private buscarItem(id: number, blingService: Bling): Observable<ProdutoBling> {
+    return from(blingService.produtos.find({ idProduto: id })).pipe(
+      catchError((err) => {
+        if (err.message === REQUEST_LIMIT_MESSAGE) {
+          logger.info(
+            `[ProdutoImportacao] Irá pesquisar novamente o item ${id}. Aguardando ${TIMER_DELAY_MS} ms`,
+          );
+          return timer(TIMER_DELAY_MS).pipe(switchMap(() => this.buscarItem(id, blingService)));
+        } else {
+          throw new Error(
+            `[ProdutoImportacao] Não foi possível pesquisar o id ${id}. Motivo: ${err.message} `,
+          );
+        }
       }),
-      toArray(),
     );
   }
 
-  private SalvarCategoriaOpcao(
-    repoCategoria: Repository<ProdutoCategoria>,
-    nome: string,
-    valor: string,
-  ): Observable<ProdutoCategoriaOpcao> {
+  private buscarESalvar(id: number, blingService: Bling): Observable<Produto> {
+    if (!id) return of(null);
+    else
+      return this.buscarItem(id, blingService).pipe(
+        switchMap((planoContaBling) => this.salvarItem(planoContaBling, blingService)),
+      );
+  }
+
+  private salvarItem(modeloBling: ProdutoBling, blingService: Bling): Observable<Produto> {
+    const repo = this.dataSource.getRepository(Produto);
+    logger.info(
+      `[ProdutoImportacao] Salvando ${modeloBling.data.id} - ${modeloBling.data.nome} - ${modeloBling.data.formato}`,
+    );
+    return this.selecionaOuAssina(repo, modeloBling, blingService).pipe(
+      switchMap((produto) => {
+        return from(repo.save(produto));
+      }),
+    );
+  }
+
+
+  private saveResponseLog(modeloBling: ProdutoBling) {
+    let responseLogRepo = this.dataSource.getRepository(ResponseLog);
+    from(responseLogRepo.findOne({where: {
+      idOriginal: modeloBling.data.id.toFixed(0),
+      nomeInformacao: 'produto'
+    }})).pipe(
+      map(response => {
+        if(!response) response = new ResponseLog();
+        response.idOriginal = modeloBling.data.id.toFixed(0);
+        response.nomeInformacao = 'produto';
+        response.response = JSON.stringify(modeloBling);
+
+        responseLogRepo.save(response);
+      })
+    )
+  }
+
+  private selecionaOuAssina(
+    repo: Repository<Produto>,
+    modeloBling: ProdutoBling,
+    blingService: Bling,
+  ): Observable<Produto> {
+    this.saveResponseLog(modeloBling);
     return from(
-      repoCategoria.find({
-        where: { nome: nome },
+      repo.find({
+        where: {
+          idOriginal: modeloBling.data.id.toFixed(0),
+        },
+      }),
+    ).pipe(
+      switchMap((consulta) => {
+        if (consulta.length > 0) {
+          return this.criarProduto(consulta[0], modeloBling, blingService);
+        } else {
+          return this.criarProduto(null, modeloBling, blingService);
+        }
+      }),
+    );
+  }
+
+  private getOpcao(
+    categoriaName: string,
+    opcaoName: string,
+    categoriaTipo: ProdutoCategoriaTipo = 'V',
+  ): Observable<ProdutoCategoriaOpcao> {
+    let categoriaRepo = this.dataSource.getRepository(ProdutoCategoria);
+    return from(
+      categoriaRepo.find({
+        where: { nome: categoriaName },
         relations: { opcoes: true },
         order: { opcoes: { nome: 'ASC' } },
       }),
     ).pipe(
       switchMap((categorias) => {
         const [categoriaEncontrada] = categorias;
-        const opcaoEncontrada = categoriaEncontrada?.opcoes?.find((o) => o.nome === valor);
+        const opcaoEncontrada = categoriaEncontrada?.opcoes?.find((o) => o.nome === opcaoName);
 
         let categoria: ProdutoCategoria;
         let opcao: ProdutoCategoriaOpcao;
@@ -383,23 +245,25 @@ export class ProdutoImportacao implements OnModuleInit {
         } else {
           // Cria nova categoria
           categoria = new ProdutoCategoria();
-          categoria.nome = nome;
-          categoria.tipo = 'V';
+          categoria.nome = categoriaName;
+          categoria.tipo = categoriaTipo;
           categoria.opcoes = [];
         }
 
         // Cria nova opção
         opcao = new ProdutoCategoriaOpcao();
-        opcao.nome = valor;
+        opcao.nome = opcaoName;
         opcao.produtoCategoria = categoria;
         categoria.opcoes.push(opcao);
 
-        return from(repoCategoria.save(categoria)).pipe(
+        return from(categoriaRepo.save(categoria)).pipe(
           switchMap((value) => {
-            return of(value.opcoes.find((opcao) => opcao.nome === valor));
+            return of(value.opcoes.find((opcao) => opcao.nome === opcaoName));
           }),
           catchError((err) => {
-            logger.error(`Não foi possível salvar a categoria. Motivo: ${err.message}`);
+            logger.error(
+              `[ProdutoImportacao] Não foi possível salvar a categoria. Motivo: ${err.message}`,
+            );
             return of(null);
           }),
         );
@@ -407,50 +271,193 @@ export class ProdutoImportacao implements OnModuleInit {
     );
   }
 
-  private salvarFornecedor(idOriginalPessoa: number): Observable<Fornecedor> {
-    const repository = this.dataSource.getRepository(Fornecedor);
-    const repoPessoa = this.dataSource.getRepository(Pessoa);
-    console.log('222222222');
-    const query = repository
-      .createQueryBuilder('f')
-      .innerJoin(Pessoa, 'p', 'f.id_pessoa = p.id')
-      .where('p.id_original = :id', { id: idOriginalPessoa });
-    return from(query.getMany()).pipe(
-      switchMap((consulta) => {
-        if (consulta.length > 0) {
-          return of(consulta[0]);
-        } else {
-          const fornecedor = new Fornecedor();
-          return from(
-            repoPessoa.find({
-              where: { idOriginal: idOriginalPessoa.toFixed(0) },
-            }),
-          ).pipe(
-            switchMap((pessoas) => {
-              if (pessoas.length > 0) {
-                fornecedor.pessoa = pessoas[0];
-                fornecedor.situacao = 1;
-                return from(repository.save(fornecedor));
-              } else {
-                throw new Error(
-                  'Não foi possível encontrar a Pessoa de idOriginal: ' +
-                    idOriginalPessoa.toFixed(0),
-                );
-              }
-            }),
-          );
+  private getVariacao(variacao: string): Observable<ProdutoCategoriaOpcao[]> {
+    if (!variacao) return of([]);
+    else {
+      const nomes: string[] = [];
+      const valores: string[] = [];
+
+      variacao.split(';').forEach((value) => {
+        const [nome, valor] = value.split(':');
+        if (nome && valor) {
+          nomes.push(nome.toLocaleUpperCase());
+          valores.push(valor.toLocaleUpperCase());
         }
+      });
+
+      return from(nomes).pipe(
+        mergeMap((nome, index) => {
+          return this.getOpcao(nome, valores[index]);
+        }),
+        toArray(),
+      );
+    }
+  }
+
+  getCategoria(id: number, blingService: Bling): Observable<ProdutoCategoriaOpcao> {
+    if (id === 0) {
+      return of(null);
+    } else {
+      const logServiceRepo = this.dataSource.getRepository(ResponseLog);
+      return from(
+        logServiceRepo.findOne({
+          where: {
+            idOriginal: id.toFixed(0),
+            nomeInformacao: 'categoria',
+          },
+        }),
+      )
+        .pipe(
+          switchMap((responseLog) => {
+            if (!responseLog) {
+              return from(blingService.categoriasProdutos.find({ idCategoriaProduto: id })).pipe(
+                switchMap((value) => {
+                  const responseLog: ResponseLog = {
+                    id: null,
+                    idOriginal: id.toFixed(0),
+                    nomeInformacao: 'categoria',
+                    response: JSON.stringify(value),
+                    data: new Date(),
+                  };
+                  return logServiceRepo.save(responseLog);
+                }),
+              );
+            } else return of(responseLog);
+          }),
+        )
+        .pipe(
+          switchMap((responseLog) => {
+            let object = JSON.parse(responseLog.response);
+            let categoria: string = object.data.descricao;
+            return this.getOpcao('CATEGORIA', categoria.toUpperCase(), 'C');
+          }),
+        );
+    }
+  }
+
+  private criarProduto(
+    produto: Produto,
+    modeloBling: ProdutoBling,
+    blingService: Bling,
+  ): Observable<Produto> {
+    return forkJoin({
+      fornecedor: this.pessoaImportacao.selecionaFornecedor(
+        modeloBling.data.fornecedor.contato.id,
+        blingService,
+      ),
+      variacoes: this.getVariacao(modeloBling.data?.variacao?.nome),
+      marca:
+        modeloBling.data.marca.length > 0
+          ? this.getOpcao('MARCA', modeloBling.data.marca.toUpperCase(), 'C')
+          : of(null),
+      categoria: this.getCategoria(modeloBling.data.categoria.id, blingService),
+      produtoPai: this.buscarESalvar(modeloBling.data?.variacao?.produtoPai?.id, blingService),
+    }).pipe(
+      switchMap((consultas) => {
+        if (!produto) produto = new Produto();
+        produto.identificador = modeloBling.data.codigo;
+        produto.idOriginal = modeloBling.data.id.toFixed(0);
+        produto.descricao = modeloBling.data.nome;
+        produto.descricaoCurta = modeloBling.data.descricaoCurta ?? '';
+        produto.formato = modeloBling.data.formato;
+        produto.fornecedor = consultas.fornecedor;
+        produto.gtin = modeloBling.data.gtin;
+        produto.gtinEmbalagem = modeloBling.data.gtinEmbalagem;
+        produto.situacao = modeloBling.data.situacao === 'A' ? 1 : 0;
+        produto.observacoes = modeloBling.data.observacoes;
+        produto.urlImagem = modeloBling.data.imagemURL ?? '';
+        produto.valorCusto = modeloBling.data.fornecedor
+          ? modeloBling.data.fornecedor.precoCusto
+          : 0;
+        produto.valorPreco = modeloBling.data.preco;
+
+        if (!produto.categoriasOpcao) produto.categoriasOpcao = [];
+
+        const mergeRelacoes = (
+          relacoes: ProdutoCategoriaRelacao[],
+          opcoes: ProdutoCategoriaOpcao[],
+        ): ProdutoCategoriaRelacao[] => {
+
+          if (!opcoes) return [];
+
+          if (!opcoes[0]) return [];
+
+          let novasRelacoes = opcoes.map((opcao) => {
+            const relacao = new ProdutoCategoriaRelacao();
+            relacao.produtoCategoriaOpcao = opcao;
+            return relacao;
+          });
+
+          novasRelacoes.map((nrel) => {
+            const encontrado = relacoes.find(
+              (value) =>
+                value.produtoCategoriaOpcao.nome === nrel.produtoCategoriaOpcao.nome &&
+                value.produtoCategoriaOpcao.produtoCategoria.nome ===
+                  nrel.produtoCategoriaOpcao.produtoCategoria.nome,
+            );
+
+            if (!encontrado) relacoes.push(nrel);
+          });
+
+          return relacoes;
+        };
+
+        mergeRelacoes(produto.categoriasOpcao, [consultas.categoria]);
+        mergeRelacoes(produto.categoriasOpcao, [consultas.marca]);
+        mergeRelacoes(produto.categoriasOpcao, consultas.variacoes);
+
+        if (consultas.produtoPai) produto.produtoPai = consultas.produtoPai;
+
+        return of(produto);
       }),
     );
   }
 
-  private criarFiltroPessoa(vendedor: Produto): SelectQueryBuilder<Produto> {
-    let select = this.produtoService.repository
-      .createQueryBuilder('v')
-      .orWhere('v.id_original = :idOriginal', {
-        idOriginal: vendedor.idOriginal,
-      });
+  seleciona(idOriginal: number, blingService: Bling): Observable<Produto> {
+    logger.info(`[ProdutoImportacao] Seleciona ${idOriginal}`);
+    if (!idOriginal) return of(null);
+    else {
+      const repo = this.dataSource.getRepository(Produto);
+      return from(repo.findOne({ where: { idOriginal: idOriginal.toFixed(0) } })).pipe(
+        switchMap((produto) => {
+          if (!produto) {
+            return timer(200).pipe(
+              switchMap(() => this.buscarESalvar(idOriginal, blingService)),
+            );
+          } else return of(produto);
+        }),
+      );
+    }
+  }
 
-    return select;
+  private buscarControle(): Observable<ControleImportacao> {
+    const repo = this.dataSource.getRepository(ControleImportacao);
+    return from(repo.find({ where: { tabela: this.tabela } })).pipe(
+      map((consulta) => (consulta.length > 0 ? consulta[0] : this.criarNovoControle())),
+      switchMap((controle) => from(repo.save(controle))),
+    );
+  }
+
+  private criarNovoControle(): ControleImportacao {
+    const controle = new ControleImportacao();
+    controle.tabela = this.tabela;
+    controle.ultimoIndexProcessado = -1;
+    controle.pagina = 1;
+    return controle;
+  }
+
+  private atualizarControle(
+    controle: ControleImportacao,
+    paginaOuItem: 'pagina' | 'index',
+  ): Observable<ControleImportacao> {
+    const repo = this.dataSource.getRepository(ControleImportacao);
+
+    if (paginaOuItem == 'index') {
+      controle.ultimoIndexProcessado += 1;
+    } else {
+      controle.pagina += 1;
+      controle.ultimoIndexProcessado = -1;
+    }
+    return from(repo.save(controle));
   }
 }

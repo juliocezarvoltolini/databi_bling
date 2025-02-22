@@ -1,0 +1,1 @@
+select p.*, pe.cep, pe.bairro, pe.municipio, pe.uf, pe.numero, pe.complemento  from pessoa as p inner join pessoa_endereco as pe on (p.id = pe.id_pessoa)

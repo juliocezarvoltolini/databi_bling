@@ -24,12 +24,12 @@ export class BigDecimalOperationsCopy {
         return result.valueOf();
     }
 
-    public static multiply(number1: number, number2: number, precision = 8): number {
-        let result = new Number(this.roundOff(this._multiply(this.validate(number1), this.validate(number2)), precision, RoundingModes.DOWN));
+    public static multiply(number1: number, number2: number, precision = 8, mode: RoundingModes = RoundingModes.DOWN): number {
+        let result = new Number(this.roundOff(this._multiply(this.validate(number1), this.validate(number2)), precision, mode));
         return result.valueOf();
     }
 
-    public static divide(dividend: number, divisor: number, precission = 8): number {
+    public static divide(dividend: number, divisor: number, precission = 8, mode: RoundingModes = RoundingModes.DOWN): number {
         let result = new Number(this._divide(this.validate(dividend), this.validate(divisor), precission, RoundingModes.DOWN));
         return result.valueOf();
     }
@@ -245,7 +245,7 @@ export class BigDecimalOperationsCopy {
         return ((neg == 1) ? '-' : '') + this.trim(this.roundOff(quotent, precission - 2, mode));
     }
 
-    private static roundOff(input: number | string | bigint, n: number = 0, mode = RoundingModes.HALF_EVEN) {
+    public static roundOff(input: number | string | bigint, n: number = 0, mode = RoundingModes.HALF_EVEN) {
         if (mode === RoundingModes.UNNECESSARY) {
             throw new Error("UNNECESSARY Rounding Mode has not yet been implemented");
         }
@@ -534,7 +534,7 @@ export class BigDecimalOperationsCopy {
     }
 }
 
-enum RoundingModes {
+export enum RoundingModes {
     /**
      * Rounding mode to round towards positive infinity.
      */

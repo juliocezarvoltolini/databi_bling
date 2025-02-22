@@ -5,7 +5,8 @@ import { ResponsePage } from "../page/response-page-interface";
 import { IPageRequest } from "../page/request-page-interface";
 
 export interface IService<A> {
-    create(entityDTO: DeepPartial<A | A[]>): Observable<A | A[]>
+    
+    create(entityDTO: DeepPartial<A> | DeepPartial<A[]>): Observable<A> |  Observable<A[]>
 
     pagedSearch(pageRquest: IPageRequest<A>): Observable<ResponsePage<A>>
 

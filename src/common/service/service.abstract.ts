@@ -23,50 +23,61 @@ import { validate } from 'class-validator';
 import { IPageRequest, PageRequest } from '../page/request-page-interface';
 
 export class BaseService<A extends object> implements IService<A> {
-  constructor(public repository: Repository<A>) { }
+  constructor(public repository: Repository<A>) {}
 
   find(entity: DeepPartial<A>): Observable<A[]> {
     let where = BuildFindOptionsFromModel<A>(entity, this.repository.metadata);
     return from(
       this.repository.find({
         where: where,
-      })
+      }),
     );
   }
 
-  
-  create(entityDTO: DeepPartial<A | A[]>): Observable<A | A[]> {
+  create(entityDTO: DeepPartial<A>): Observable<A>;
+  create(entitiesDTO: DeepPartial<A[]>): Observable<A[]>;
+  create(entityDTO: DeepPartial<A> | DeepPartial<A[]>): Observable<A> | Observable<A[]> {
     const newEntity = Array.isArray(entityDTO)
       ? this.repository.create(entityDTO as A[]) // Cria múltiplos
       : this.repository.create(entityDTO); // Cria único
 
-    //Preciso validar o objeto e se não retornar error irei salvar no banco. Como fazer usando observable ?
     const validateEntity$ = from(validate(newEntity));
+
+    if (Array.isArray(newEntity)) {
+      return validateEntity$.pipe(
+        mergeMap((errors) => {
+          if (errors.length > 0) {
+            return throwError(
+              () =>
+                new Error(
+                  'Validation failed: ' + JSON.stringify(errors.map((value) => value.constraints)),
+                ),
+            );
+          }
+          return defer(() => from(this.repository.save(newEntity))); // Observable<A[]>
+        }),
+      ) as Observable<A[]>; // Garantimos explicitamente o tipo
+    }
 
     return validateEntity$.pipe(
       mergeMap((errors) => {
         if (errors.length > 0) {
-          console.log(errors);
-          throw new Error(
-            'Validation failed: ' +
-            JSON.stringify(errors.map((value) => value.constraints)),
+          return throwError(
+            () =>
+              new Error(
+                'Validation failed: ' + JSON.stringify(errors.map((value) => value.constraints)),
+              ),
           );
-        } else {
-          return Array.isArray(newEntity)
-            ? defer(() => this.repository.save(newEntity)) // Observable<A[]>
-            : defer(() => this.repository.save(newEntity)); // Observable<A>
         }
+        return defer(() => from(this.repository.save(newEntity))); // Observable<A>
       }),
-    );
+    ) as Observable<A>; // Garantimos explicitamente o tipo
   }
 
   pagedSearch(pageRquest: IPageRequest<A>): Observable<ResponsePage<A>> {
     let pageService = new PageRequest(pageRquest);
 
-    let where$ = BuildFindOptionsFromModel<A>(
-      pageRquest.object,
-      this.repository.metadata,
-    );
+    let where$ = BuildFindOptionsFromModel<A>(pageRquest.object, this.repository.metadata);
 
     return forkJoin([
       from(
@@ -92,8 +103,7 @@ export class BaseService<A extends object> implements IService<A> {
     );
   }
   findOne(id: any): Observable<A> {
-    const idPropertyName =
-      this.repository.metadata.primaryColumns[0].propertyName;
+    const idPropertyName = this.repository.metadata.primaryColumns[0].propertyName;
     const _where = {};
     _where[idPropertyName] = Equal(id);
     console.log(_where);

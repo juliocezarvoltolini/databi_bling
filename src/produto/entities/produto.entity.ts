@@ -37,4 +37,6 @@ export class Produto {
     idOriginal: string;
     @OneToMany(() => ProdutoCategoriaRelacao, rel => rel.produto, { cascade: true, eager: true })
     categoriasOpcao: ProdutoCategoriaRelacao[];
+    @Column({name: 'identificador', type: 'varchar', length: 50, nullable: true})
+    identificador: string;
 }
