@@ -17,11 +17,11 @@ import {
   tap,
   timer,
 } from 'rxjs';
-import { PlanoConta } from 'src/conta/plano-conta/entities/plano-conta.entity';
-import { ControleImportacao } from 'src/controle-importacao/entities/controle-importacao.entity';
-import { AuthBlingService } from 'src/integracao/bling/auth-bling.service';
+import { PlanoConta } from 'src/app/conta/plano-conta/entities/plano-conta.entity';
+import { ControleImportacao } from 'src/app/controle-importacao/entities/controle-importacao.entity';
+import { AuthBlingService } from 'src/app/integracao/bling/auth-bling.service';
 import { DataSource, Repository } from 'typeorm';
-import { PlanoContaTipo } from 'src/conta/plano-conta/entities/plano-conta.types';
+import { PlanoContaTipo } from 'src/app/conta/plano-conta/entities/plano-conta.types';
 import { logger } from 'src/logger/winston.logger';
 
 const REQUEST_LIMIT_MESSAGE =

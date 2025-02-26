@@ -17,16 +17,16 @@ import {
   tap,
   timer,
 } from 'rxjs';
-import { ControleImportacao } from 'src/controle-importacao/entities/controle-importacao.entity';
-import { AuthBlingService } from 'src/integracao/bling/auth-bling.service';
+import { ControleImportacao } from 'src/app/controle-importacao/entities/controle-importacao.entity';
+import { AuthBlingService } from 'src/app/integracao/bling/auth-bling.service';
 import { DataSource, Repository } from 'typeorm';
 import { logger } from 'src/logger/winston.logger';
 import { FormaPagamentoImportacao } from './interface/forma-pagamento-importacao';
 import { PessoaImportacao } from './pessoa-importacao';
 import { NfeCategoriaImportacao } from './nfe-categoria-importacao';
-import { Nfe } from 'src/nfe/entities/nfe.entity';
+import { Nfe } from 'src/app/nfe/entities/nfe.entity';
 import { VendedorImportacao } from './interface/vendedor-importacao';
-import { Vendedor } from 'src/vendedor/entities/vendedor.entity';
+import { Vendedor } from 'src/app/vendedor/entities/vendedor.entity';
 
 const REQUEST_LIMIT_MESSAGE =
   'O limite de requisições por segundo foi atingido, tente novamente mais tarde.';

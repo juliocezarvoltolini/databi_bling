@@ -6,43 +6,37 @@ import { IFindResponse as VendaBling } from 'bling-erp-api/lib/entities/pedidosV
 import {
   catchError,
   concatMap,
-  EMPTY,
   forkJoin,
   from,
   map,
-  mergeAll,
   mergeMap,
   Observable,
   of,
-  reduce,
   switchMap,
   tap,
   timer,
   toArray,
 } from 'rxjs';
-import { ControleImportacao } from 'src/controle-importacao/entities/controle-importacao.entity';
-import { AuthBlingService } from 'src/integracao/bling/auth-bling.service';
+import { ControleImportacao } from 'src/app/controle-importacao/entities/controle-importacao.entity';
+import { AuthBlingService } from 'src/app/integracao/bling/auth-bling.service';
 import { DataSource, Repository } from 'typeorm';
 import { logger } from 'src/logger/winston.logger';
 import { FormaPagamentoImportacao } from './forma-pagamento-importacao';
 import { PessoaImportacao } from '../pessoa-importacao';
-import { Venda } from 'src/venda/entities/venda.entity';
+import { Venda } from 'src/app/venda/entities/venda.entity';
 import { VendedorImportacao } from './vendedor-importacao';
-import { FormaPagamento } from 'src/forma-pagamento/entities/forma-pagamento.entity';
-import { Item } from 'src/venda/item/entities/item.entity';
-import { VendaPagamento } from 'src/venda/pagamento/entities/venda-pagamento.entity';
-import { Produto } from 'src/produto/entities/produto.entity';
+import { Item } from 'src/app/venda/item/entities/item.entity';
+import { VendaPagamento } from 'src/app/venda/pagamento/entities/venda-pagamento.entity';
 import { ProdutoImportacao } from './produto-importacao';
-import { Empresa } from 'src/empresa/entities/empresa.entity';
-import { ResponseLog } from 'src/response-log/entities/response-log.entity';
-import { response } from 'express';
-import { AppMath } from 'src/common/util/operacoes-matematicas/app-math-operations';
-import { RoundingModes } from 'src/common/util/operacoes-matematicas/big-decimal-operations.copy';
+import { Empresa } from 'src/app/empresa/entities/empresa.entity';
+import { ResponseLog } from 'src/app/response-log/entities/response-log.entity';
+import { AppMath } from 'src/shared/util/operacoes-matematicas/app-math-operations';
+import { RoundingModes } from 'src/shared/util/operacoes-matematicas/big-decimal-operations.copy';
 
-const REQUEST_LIMIT_MESSAGE =
-  'O limite de requisições por segundo foi atingido, tente novamente mais tarde.';
-
-const ERROS = ['Não foi possível realizar a chamada HTTP: get', 'O limite de requisições por segundo foi atingido, tente novamente mais tarde.']
+const ERROS = [
+  'Não foi possível realizar a chamada HTTP: get',
+  'O limite de requisições por segundo foi atingido, tente novamente mais tarde.',
+];
 const TIMER_DELAY_MS = 15000;
 
 class ItemBling {
@@ -82,10 +76,10 @@ class Totalizadores {
   total: number;
 
   constructor() {
-    this.subtotal = 0.00;
-    this.desconto = 0.00;
-    this.descontoRateado = 0.00;
-    this.total = 0.00;
+    this.subtotal = 0;
+    this.desconto = 0;
+    this.descontoRateado = 0;
+    this.total = 0;
   }
 }
 
@@ -145,12 +139,16 @@ export class VendaNewImportacao implements OnModuleInit {
         return from(itensRestantes);
       }),
       concatMap((contaBling) => {
-        if (contaBling.total > 0) return timer(350).pipe(concatMap(() => this.buscarESalvar(contaBling.id, contaBling.situacao.id, blingService)))
-        else return of(new Venda())
-      }
-      ),
+        if (contaBling.total > 0)
+          return timer(350).pipe(
+            concatMap(() =>
+              this.buscarESalvar(contaBling.id, contaBling.situacao.id, blingService),
+            ),
+          );
+        else return of(new Venda());
+      }),
       tap(() => {
-        let index = controle.ultimoIndexProcessado + 1;
+        const index = controle.ultimoIndexProcessado + 1;
         logger.info(`[VendaNewImportacao] INDEX ${index} DATA ${controle.data}`);
         this.atualizarControle(controle, 'index');
       }),
@@ -167,7 +165,7 @@ export class VendaNewImportacao implements OnModuleInit {
     } else {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      let lastDate = new Date(controle.data + 'T00:00:00');
+      const lastDate = new Date(controle.data + 'T00:00:00');
       lastDate.setHours(0, 0, 0, 0);
       if (lastDate < today) {
         lastDate.setDate(lastDate.getDate() + 1);
@@ -212,8 +210,7 @@ export class VendaNewImportacao implements OnModuleInit {
           }),
         ).pipe(
           catchError((err: Error) => {
-
-            if (ERROS.filter(erro => err.message.includes(erro))) {
+            if (ERROS.filter((erro) => err.message.includes(erro))) {
               logger.info(
                 `[VendaNewImportacao] Irá pesquisar novamente a página ${controle}. Aguardando ${TIMER_DELAY_MS} ms`,
               );
@@ -232,18 +229,21 @@ export class VendaNewImportacao implements OnModuleInit {
   }
 
   private buscarItem(id: number, situacao, blingService: Bling): Observable<VendaBling> {
-    let responseLogRepo = this.dataSource.getRepository(ResponseLog);
-    return from(responseLogRepo.findOne({ where: { idOriginal: id.toFixed(0), nomeInformacao: 'venda' } })).pipe(
-      switchMap(responseLog => {
+    const responseLogRepo = this.dataSource.getRepository(ResponseLog);
+    return from(
+      responseLogRepo.findOne({ where: { idOriginal: id.toFixed(0), nomeInformacao: 'venda' } }),
+    ).pipe(
+      switchMap((responseLog) => {
         if (responseLog && situacao == 9) {
           logger.info(`[VendaNewImportacao] Item ${id} encontrado no cache.`);
 
           return of(JSON.parse(responseLog.response));
         } else {
           return from(blingService.pedidosVendas.find({ idPedidoVenda: id })).pipe(
-            tap(item => {
-              responseLogRepo.findOne({ where: { idOriginal: id.toFixed(0), nomeInformacao: 'venda' } }).then(
-                response => {
+            tap((item) => {
+              responseLogRepo
+                .findOne({ where: { idOriginal: id.toFixed(0), nomeInformacao: 'venda' } })
+                .then((response) => {
                   if (!response) {
                     responseLog = new ResponseLog();
                   }
@@ -253,22 +253,26 @@ export class VendaNewImportacao implements OnModuleInit {
                   responseLog.data = new Date();
                   responseLog.response = JSON.stringify(item);
                   responseLogRepo.save(responseLog);
-                }
-              )
+                });
             }),
             catchError((err) => {
-              if (ERROS.filter(erro => err.message.includes(erro))) {
-                logger.info(`[VendaNewImportacao] Irá pesquisar novamente o item ${id}. Aguardando ${TIMER_DELAY_MS} ms`);
-                return timer(TIMER_DELAY_MS).pipe(switchMap(() => this.buscarItem(id, situacao, blingService)));
+              if (ERROS.filter((erro) => err.message.includes(erro))) {
+                logger.info(
+                  `[VendaNewImportacao] Irá pesquisar novamente o item ${id}. Aguardando ${TIMER_DELAY_MS} ms`,
+                );
+                return timer(TIMER_DELAY_MS).pipe(
+                  switchMap(() => this.buscarItem(id, situacao, blingService)),
+                );
               } else {
-                throw new Error(`[VendaNewImportacao] Não foi possível pesquisar o id ${id}. Motivo: ${err.message} `);
+                throw new Error(
+                  `[VendaNewImportacao] Não foi possível pesquisar o id ${id}. Motivo: ${err.message} `,
+                );
               }
             }),
           );
         }
-      })
-    )
-
+      }),
+    );
   }
 
   private buscarESalvar(id: number, situacao: number, blingService: Bling): Observable<Venda> {
@@ -279,7 +283,9 @@ export class VendaNewImportacao implements OnModuleInit {
 
   private salvarItem(modeloBling: VendaBling, blingService: Bling): Observable<Venda> {
     const repo = this.dataSource.getRepository(Venda);
-    logger.info(`[VendaNewImportacao] Salvando ${modeloBling.data.id} - ${modeloBling.data.contato.nome} - ${modeloBling.data.total}`);
+    logger.info(
+      `[VendaNewImportacao] Salvando ${modeloBling.data.id} - ${modeloBling.data.contato.nome} - ${modeloBling.data.total}`,
+    );
     return this.selecionaOuAssina(repo, modeloBling, blingService).pipe(
       mergeMap((venda) => {
         return from(repo.save(venda));
@@ -326,7 +332,12 @@ export class VendaNewImportacao implements OnModuleInit {
       vendedor: this.vendedorImportacao.seleciona(res.vendedor.id, blingService),
       pessoa: this.pessoaImportacao.seleciona(res.contato.id, blingService),
       itens: this.createItens(venda.itens, res.itens, venda.dataEmissao, blingService),
-      pagamentos: this.createPagamentos(venda.pagamentos, res.parcelas, venda.dataSaida, blingService),
+      pagamentos: this.createPagamentos(
+        venda.pagamentos,
+        res.parcelas,
+        venda.dataSaida,
+        blingService,
+      ),
     }).pipe(
       switchMap((pesquisas) => {
         venda.identificador = res.numero.toFixed(0);
@@ -335,7 +346,11 @@ export class VendaNewImportacao implements OnModuleInit {
         venda.itens = pesquisas.itens.itens;
         venda.pagamentos = pesquisas.pagamentos;
 
-        const valorLiquidoProduto = AppMath.sum([response.data.total, -(response.data?.outrasDespesas ?? 0.00), -(response.data?.transporte?.frete ?? 0.00)]);
+        const valorLiquidoProduto = AppMath.sum([
+          response.data.total,
+          -(response.data?.outrasDespesas ?? 0.0),
+          -(response.data?.transporte?.frete ?? 0.0),
+        ]);
 
         const valorDesconto = AppMath.sum([response.data.totalProdutos, -valorLiquidoProduto]);
 
@@ -391,11 +406,11 @@ export class VendaNewImportacao implements OnModuleInit {
       concatMap((itembling: ItemBling) =>
         this.produtoImportacao.seleciona(itembling.produto.id, blingService).pipe(
           switchMap((produto) => {
-            let existingItem = itens.find((itm) => itm.idOriginal === itembling.id.toFixed(0));
-            let newItem = existingItem || new Item();
+            const existingItem = itens.find((itm) => itm.idOriginal === itembling.id.toFixed(0));
+            const newItem = existingItem || new Item();
             if (!existingItem) itens.push(newItem);
 
-            let precoVenda = 0.00;
+            let precoVenda = 0.0;
 
             // if (produto.valorPreco) precoVenda = produto.valorPreco;
             // else {
@@ -405,31 +420,34 @@ export class VendaNewImportacao implements OnModuleInit {
 
             precoVenda = AppMath.round(precoVenda, 2, RoundingModes.HALF_DOWN);
 
-
             // }
             let diferencaPreco = AppMath.sum(precoVenda, -produto.valorPreco);
-            if (diferencaPreco < 0.00) diferencaPreco = AppMath.multiply(diferencaPreco, -1);
-            if (diferencaPreco < 0.10) precoVenda = produto.valorPreco;
+            if (diferencaPreco < 0.0) diferencaPreco = AppMath.multiply(diferencaPreco, -1);
+            if (diferencaPreco < 0.1) precoVenda = produto.valorPreco;
 
             newItem.identificador = itembling.codigo;
             newItem.idOriginal = itembling.id.toFixed(0);
             newItem.produto = produto;
 
-
-            let subtotalItem = AppMath.multiply(precoVenda, itembling.quantidade);
+            const subtotalItem = AppMath.multiply(precoVenda, itembling.quantidade);
 
             newItem.valor = precoVenda;
             newItem.total = AppMath.multiply(itembling.valor, itembling.quantidade);
 
             newItem.desconto_percentual = itembling.desconto || 0.0;
-            newItem.desconto_valor = itembling.desconto ? AppMath.sum(subtotalItem, -newItem.total) : 0.0;
+            newItem.desconto_valor = itembling.desconto
+              ? AppMath.sum(subtotalItem, -newItem.total)
+              : 0.0;
             newItem.quantidade = itembling.quantidade;
             newItem.unidade = itembling.unidade;
             newItem.estado = 'A';
             newItem.data = data;
 
             totalizadores.desconto = AppMath.sum(totalizadores.desconto, newItem.desconto_valor);
-            totalizadores.subtotal = AppMath.sum(totalizadores.subtotal, AppMath.multiply(precoVenda, itembling.quantidade));
+            totalizadores.subtotal = AppMath.sum(
+              totalizadores.subtotal,
+              AppMath.multiply(precoVenda, itembling.quantidade),
+            );
             totalizadores.total = AppMath.sum(totalizadores.total, newItem.total);
 
             return of(newItem);
@@ -438,7 +456,7 @@ export class VendaNewImportacao implements OnModuleInit {
       ),
       toArray(),
       switchMap((itens) => {
-        let retorno = {
+        const retorno = {
           itens: itens,
           totalizadores: totalizadores,
         };
@@ -459,8 +477,18 @@ export class VendaNewImportacao implements OnModuleInit {
 
     itens.forEach((item, index) => {
       const subtotalItem = item.total;
-      const proporcaoItem = AppMath.divide(subtotalItem, totalizadores.subtotal, 2, RoundingModes.HALF_UP);
-      let descontoProporcional = AppMath.multiply(desconto, proporcaoItem, 2, RoundingModes.HALF_UP);
+      const proporcaoItem = AppMath.divide(
+        subtotalItem,
+        totalizadores.subtotal,
+        2,
+        RoundingModes.HALF_UP,
+      );
+      let descontoProporcional = AppMath.multiply(
+        desconto,
+        proporcaoItem,
+        2,
+        RoundingModes.HALF_UP,
+      );
 
       if (index === itens.length - 1) descontoProporcional = resto;
 
@@ -475,7 +503,6 @@ export class VendaNewImportacao implements OnModuleInit {
         totalizadores.descontoRateado,
         item.desconto_rateado_valor,
       );
-
     });
 
     totalizadores.total = AppMath.sum(totalizadores.subtotal, totalizadores.descontoRateado);
@@ -485,7 +512,7 @@ export class VendaNewImportacao implements OnModuleInit {
     pagamentos: VendaPagamento[],
     pagamentosBling: PagamentoBling[],
     data: Date,
-    blingService: Bling
+    blingService: Bling,
   ): Observable<VendaPagamento[]> {
     // Ordena os itensBling por id
     pagamentosBling.sort((a, b) => a.id - b.id);
@@ -496,26 +523,27 @@ export class VendaNewImportacao implements OnModuleInit {
 
     return from(pagamentosBling).pipe(
       mergeMap((pagamentoBling: PagamentoBling) => {
+        return this.formaPagamentoImportacao
+          .seleciona(pagamentoBling.formaPagamento.id, blingService)
+          .pipe(
+            mergeMap((formaPagamento) => {
+              const existingPagamento = pagamentos.find(
+                (pag) => pag.idOriginal === pagamentoBling.id.toFixed(0),
+              );
+              const newPagamento = existingPagamento || new VendaPagamento();
 
-        return this.formaPagamentoImportacao.seleciona(pagamentoBling.formaPagamento.id, blingService).pipe(
-          mergeMap((formaPagamento) => {
-            let existingPagamento = pagamentos.find(
-              (pag) => pag.idOriginal === pagamentoBling.id.toFixed(0),
-            );
-            let newPagamento = existingPagamento || new VendaPagamento();
+              if (!existingPagamento) pagamentos.push(newPagamento);
 
-            if (!existingPagamento) pagamentos.push(newPagamento);
+              newPagamento.idOriginal = pagamentoBling.id.toFixed(0);
+              newPagamento.formaPagamento = formaPagamento;
+              newPagamento.dataVencimento = this.toDate(pagamentoBling.dataVencimento);
+              if (data) newPagamento.dataEmissao = data;
+              newPagamento.observacao = pagamentoBling.observacoes;
+              newPagamento.valor = pagamentoBling.valor;
 
-            newPagamento.idOriginal = pagamentoBling.id.toFixed(0);
-            newPagamento.formaPagamento = formaPagamento;
-            newPagamento.dataVencimento = this.toDate(pagamentoBling.dataVencimento);
-            if (data) newPagamento.dataEmissao = data;
-            newPagamento.observacao = pagamentoBling.observacoes;
-            newPagamento.valor = pagamentoBling.valor;
-
-            return of(newPagamento);
-          }),
-        );
+              return of(newPagamento);
+            }),
+          );
       }),
       toArray(),
     );
@@ -535,7 +563,7 @@ export class VendaNewImportacao implements OnModuleInit {
       else return null;
     } else if (dateAsString.length === 19) {
       if (dateAsString != '0000-00-00 00:00:00') {
-        let [primeiraParte, segundaParte] = dateAsString.split(' ');
+        const [primeiraParte, segundaParte] = dateAsString.split(' ');
         return new Date(`${primeiraParte}T${segundaParte}`);
       } else {
         return null;

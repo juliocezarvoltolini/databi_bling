@@ -2,28 +2,14 @@ import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
 import Bling from 'bling-erp-api';
 import { IGetResponse as PessoaBling } from 'bling-erp-api/lib/entities/contatos/interfaces/get.interface';
 import { IFindResponse as PessoasBling } from 'bling-erp-api/lib/entities/contatos/interfaces/find.interface';
-
-import {
-  catchError,
-  concatMap,
-  EMPTY,
-  forkJoin,
-  from,
-  map,
-  Observable,
-  of,
-  switchMap,
-  tap,
-  timer,
-} from 'rxjs';
-import { ControleImportacao } from 'src/controle-importacao/entities/controle-importacao.entity';
-import { AuthBlingService } from 'src/integracao/bling/auth-bling.service';
 import { DataSource, Repository } from 'typeorm';
 import { logger } from 'src/logger/winston.logger';
-import { Pessoa } from 'src/pessoa/entities/pesssoa.entity';
-import { PessoaEndereco } from 'src/pessoa/entities/pessoa-endereco.entity';
-import { IUF } from 'src/common/types/uf.types';
-import { Fornecedor } from 'src/fornecedor/entities/fornecedor.entity';
+import { Pessoa } from 'src/app/pessoa/entities/pesssoa.entity';
+import { PessoaEndereco } from 'src/app/pessoa/entities/pessoa-endereco.entity';
+import { IUF } from 'src/shared/types/uf.types';
+import { Fornecedor } from 'src/app/fornecedor/entities/fornecedor.entity';
+import { ControleImportacao } from 'src/app/controle-importacao/entities/controle-importacao.entity';
+import { AuthBlingService } from 'src/app/integracao/bling/auth-bling.service';
 
 const REQUEST_LIMIT_MESSAGE =
   'O limite de requisições por segundo foi atingido, tente novamente mais tarde.';
@@ -44,248 +30,209 @@ export class PessoaImportacao implements OnModuleInit {
     // this.iniciar();
   }
 
-  private iniciar() {
-    let controle: ControleImportacao;
-    let blingService: Bling;
+  async iniciar() {
+    try {
+      const controle = await this.buscarControle();
+      const acessToken = await this.service.getAcessToken();
+      const blingService = new Bling(acessToken);
 
-    forkJoin({
-      controle: this.buscarControle(),
-      acessToken: from(this.service.getAcessToken()),
-    })
-      .pipe(
-        switchMap((values) => {
-          blingService = new Bling(values.acessToken);
-          controle = values.controle;
-          return this.processarPagina(blingService, controle);
-        }),
-      )
-      .subscribe({
-        next: (value) => {
-          logger.info(`[PessoaImportacao] Item processado com sucesso. ID:${value.id} - NOME: ${value.nome}`);
-          logger.info(`======================================================================`);
-        },
-        complete: () => this.finalizarProcessamento(controle),
-        error: (err) => {
-          console.log(err);
-          logger.error('[PessoaImportacao] Erro inesperado: ' + err.message);
-        },
-      });
+      await this.processarPagina(blingService, controle);
+      logger.info(`[PessoaImportacao] Processamento iniciado.`);
+    } catch (err) {
+      logger.error('[PessoaImportacao] Erro inesperado: ' + err.message);
+    }
   }
 
-  private processarPagina(blingService: Bling, controle: ControleImportacao): Observable<Pessoa> {
-    return this.buscarPagina(controle, blingService).pipe(
-      switchMap((lista) => {
-        const itensRestantes =
-          lista.data.length > 0 ? lista.data.slice(controle.ultimoIndexProcessado + 1) : EMPTY;
-        logger.info(`[PessoaImportacao] Página ${controle.pagina} Regitros: ${lista.data.length}`);
-        return from(itensRestantes);
-      }),
-      concatMap((contaBling) =>
-        timer(350).pipe(concatMap(() => this.buscarESalvar(contaBling.id, blingService))),
-      ),
-      tap(() => {
-        let index = controle.ultimoIndexProcessado + 1;
-        logger.info(`[PessoaImportacao] INDEX ${index}`);
-        this.atualizarControle(controle, 'index');
-      }),
-    );
+  async processarPagina(blingService: Bling, controle: ControleImportacao): Promise<void> {
+    try {
+      const lista = await this.buscarPagina(controle, blingService);
+      const itensRestantes =
+        lista.data.length > 0 ? lista.data.slice(controle.ultimoIndexProcessado + 1) : [];
+
+      for (const contaBling of itensRestantes) {
+        await new Promise((resolve) => setTimeout(resolve, 350));
+        await this.buscarESalvar(contaBling.id, blingService);
+        controle.ultimoIndexProcessado += 1;
+        await this.atualizarControle(controle, 'index');
+      }
+
+      await this.finalizarProcessamento(controle);
+    } catch (err) {
+      logger.error('[PessoaImportacao] Erro inesperado: ' + err.message);
+    }
   }
 
-  private finalizarProcessamento(controle: ControleImportacao) {
+  async finalizarProcessamento(controle: ControleImportacao): Promise<void> {
     logger.info(`[PessoaImportacao] Completou a página ${controle.pagina}.`);
     if (controle.ultimoIndexProcessado == 99) {
       logger.info(`[PessoaImportacao] Próxima página.`);
-      this.atualizarControle(controle, 'pagina')
-        .pipe(map(() => this.iniciar()))
-        .subscribe();
+      await this.atualizarControle(controle, 'pagina');
+      await this.iniciar();
     } else {
       logger.info(`[PessoaImportacao] Busca finalizada.`);
     }
   }
 
-  private buscarPagina(controle: ControleImportacao, blingService: Bling): Observable<PessoaBling> {
-    logger.info(`[PessoaImportacao] Buscando página ${controle.pagina}`);
-    return from(
-      blingService.contatos.get({
-        pagina: controle.pagina,
-        limite: 100,
-      }),
-    ).pipe(
-      catchError((err) => {
-        if (err.message === REQUEST_LIMIT_MESSAGE) {
-          logger.info(
-            `[PessoaImportacao] Irá pesquisar novamente a página ${controle}. Aguardando ${TIMER_DELAY_MS} ms`,
-          );
-          return timer(TIMER_DELAY_MS).pipe(
-            switchMap(() => this.buscarPagina(controle, blingService)),
-          );
-        } else {
-          throw new Error(
-            `[PessoaImportacao] Não foi possível pesquisar a página ${controle}. Motivo: ${err.message} `,
-          );
-        }
-      }),
-    );
+  async buscarPagina(controle: ControleImportacao, blingService: Bling): Promise<PessoaBling> {
+    try {
+      logger.info(`[PessoaImportacao] Buscando página ${controle.pagina}`);
+      return await blingService.contatos.get({ pagina: controle.pagina, limite: 100 });
+    } catch (err) {
+      if (err.message === REQUEST_LIMIT_MESSAGE) {
+        logger.info(`
+          [PessoaImportacao] Irá pesquisar novamente a página ${controle}. Aguardando ${TIMER_DELAY_MS} ms`);
+        await new Promise((resolve) => setTimeout(resolve, TIMER_DELAY_MS));
+        return this.buscarPagina(controle, blingService);
+      } else {
+        throw new Error(`
+          [PessoaImportacao] Não foi possível pesquisar a página ${controle}. Motivo: ${err.message}`);
+      }
+    }
   }
 
-  buscarItem(id: number, blingService: Bling): Observable<PessoasBling> {
-    logger.info(`[PessoaImportacao] Buscando item ${id}`);
-    return from(blingService.contatos.find({ idContato: id })).pipe(
-      catchError((err) => {
-        if (err.message === REQUEST_LIMIT_MESSAGE) {
-          logger.info(`[PessoaImportacao] Irá pesquisar novamente o item ${id}. Aguardando ${TIMER_DELAY_MS} ms`);
-          return timer(TIMER_DELAY_MS).pipe(switchMap(() => this.buscarItem(id, blingService)));
-        } else {
-          throw new Error(`[PessoaImportacao] Não foi possível pesquisar o id ${id}. Motivo: ${err.message} `);
-        }
-      }),
-      // tap((value => {
-      //   console.log('Pessoa: ' + JSON.stringify(value))
-      // }))
-    );
+  async buscarItem(id: number, blingService: Bling): Promise<PessoasBling> {
+    try {
+      logger.info(`[PessoaImportacao] Buscando item ${id}`);
+      return await blingService.contatos.find({ idContato: id });
+    } catch (err) {
+      if (err.message === REQUEST_LIMIT_MESSAGE) {
+        logger.info(`
+          [PessoaImportacao] Irá pesquisar novamente o item ${id}. Aguardando ${TIMER_DELAY_MS} ms`);
+        await new Promise((resolve) => setTimeout(resolve, TIMER_DELAY_MS));
+        return this.buscarItem(id, blingService);
+      } else {
+        throw new Error(`
+          [PessoaImportacao] Não foi possível pesquisar o id ${id}. Motivo: ${err.message}`);
+      }
+    }
   }
 
-  buscarESalvar(id: number, blingService: Bling): Observable<Pessoa> {
-    return this.buscarItem(id, blingService).pipe(
-      switchMap((planoContaBling) => this.salvarItem(planoContaBling, blingService)),
-    );
+  async buscarESalvar(id: number, blingService: Bling): Promise<Pessoa> {
+    const planoContaBling = await this.buscarItem(id, blingService);
+    return this.salvarItem(planoContaBling);
   }
 
-  salvarItem(modeloBling: PessoasBling, blingService: Bling): Observable<Pessoa> {
+  async salvarItem(modeloBling: PessoasBling): Promise<Pessoa> {
     const repo = this.dataSource.getRepository(Pessoa);
-    logger.info(`[PessoaImportacao] Salvando ${this.tabela} ${modeloBling.data.id} - ${modeloBling.data.nome}`);
-    return this.selecionaOuAssina(repo, modeloBling).pipe(
-      switchMap((conta) => {
-        if (conta.id) return of(conta);
-        else return from(repo.save(conta));
-      }),
-    );
+    logger.info(`
+      [PessoaImportacao] Salvando ${this.tabela} ${modeloBling.data.id} - ${modeloBling.data.nome}`);
+    return this.selecionaOuAssina(repo, modeloBling);
   }
 
-  selecionaOuAssina(repo: Repository<Pessoa>, modeloBling: PessoasBling): Observable<Pessoa> {
-    return from(
-      repo.findOne({
-        where: { idOriginal: modeloBling.data.id.toFixed(0) },
-        relations: ['enderecos'],
-      }),
-    ).pipe(
-      switchMap((pessoa) => {
-        if (!pessoa) {
-          pessoa = new Pessoa();
-          pessoa.idOriginal = modeloBling.data.id.toFixed(0);
-        } else {
-          logger.info('[PessoaImportacao] Encontrou a pessoa');
-        }
+  async selecionaOuAssina(repo: Repository<Pessoa>, modeloBling: PessoasBling): Promise<Pessoa> {
+    let pessoa = await repo.findOne({
+      where: { idOriginal: modeloBling.data.id.toFixed(0) },
+      relations: ['enderecos'],
+    });
 
-        // Atualize ou preencha os dados de 'pessoa' conforme o modeloBling
-        pessoa.identificador = modeloBling.data.codigo;
-        pessoa.nome = modeloBling.data.nome;
-        pessoa.fantasia = modeloBling.data.fantasia;
-        pessoa.inscricaoEstadual = modeloBling.data.ie;
-        pessoa.indicadorInscricaoEstadual = modeloBling.data.indicadorIe;
-        pessoa.numeroDocumento = modeloBling.data.numeroDocumento || null;
-        pessoa.rg = modeloBling.data.rg || null;
-        pessoa.email = modeloBling.data.email;
-        pessoa.orgaoEmissor = modeloBling.data.orgaoEmissor;
-        pessoa.situacao = modeloBling.data.situacao === 'A' ? 1 : 0;
-
-        if (modeloBling.data.tipo === 'F') {
-          pessoa.tipoPessoa = 'F';
-          pessoa.sexo = modeloBling.data.dadosAdicionais?.sexo;
-          pessoa.dataNascimento = this.toDate(modeloBling.data.dadosAdicionais.dataNascimento);
-          pessoa.naturalidade = modeloBling.data.dadosAdicionais?.naturalidade;
-        } else {
-          pessoa.tipoPessoa = 'J';
-        }
-
-        const cep = (modeloBling.data.endereco.geral.cep as string).replace(/\D/g, '').trim();
-        const municipio = (modeloBling.data.endereco.geral.municipio as string).trim();
-        const uf = (modeloBling.data.endereco.geral.uf as string).trim();
-
-        if (municipio.length > 0 && uf.length > 0) {
-          let endereco: PessoaEndereco;
-
-          if (pessoa.enderecos && pessoa.enderecos.length > 0) {
-            // Atualiza o endereço existente
-            endereco = pessoa.enderecos[0]; // Considerando apenas o primeiro endereço para simplificar
-          } else {
-            // Cria um novo endereço
-            endereco = new PessoaEndereco();
-            pessoa.enderecos = [endereco];
-          }
-
-          endereco.cep = cep;
-          endereco.bairro = modeloBling.data.endereco.geral.bairro;
-          endereco.municipio = municipio;
-          endereco.uf = uf as IUF;
-          endereco.complemento = modeloBling.data.endereco.geral.complemento;
-          endereco.numero = modeloBling.data.endereco.geral.numero;
-        }
-
-        return from(repo.save(pessoa));
-      }),
-    );
-  }
-
-  seleciona(idOriginal: number, blingService: Bling): Observable<Pessoa> {
-    if (!idOriginal) return of(null);
-    else {
-      const repo = this.dataSource.getRepository(Pessoa);
-      return from(repo.findOne({ where: { idOriginal: idOriginal.toFixed(0) } })).pipe(
-        switchMap((pessoa) => {
-          if (!pessoa) {
-            return timer(TIMER_DELAY_MS).pipe(
-              switchMap(() => this.buscarESalvar(idOriginal, blingService)),
-            );
-          } else return of(pessoa);
-        }),
-      );
+    if (!pessoa) {
+      pessoa = new Pessoa();
+      pessoa.idOriginal = modeloBling.data.id.toFixed(0);
+    } else {
+      logger.info('[PessoaImportacao] Encontrou a pessoa');
     }
-  }
 
-  selecionaFornecedor(idOriginal: number, blingService: Bling): Observable<Fornecedor> {
-    if (!idOriginal) return of(null);
-    else {
-      const repo = this.dataSource.getRepository(Pessoa);
-      const query = this.dataSource
-        .createQueryBuilder(Fornecedor, 'f')
-        .innerJoin(Pessoa, 'p', 'f.id_pessoa = p.id')
-        .where('p.id_original = :id', { id: idOriginal });
-      const repoFornecedor = this.dataSource.getRepository(Fornecedor);
+    // Atualize ou preencha os dados de 'pessoa' conforme o modeloBling
+    pessoa.identificador = modeloBling.data.codigo;
+    pessoa.nome = modeloBling.data.nome;
+    pessoa.fantasia = modeloBling.data.fantasia;
+    pessoa.inscricaoEstadual = modeloBling.data.ie;
+    pessoa.indicadorInscricaoEstadual = modeloBling.data.indicadorIe;
+    pessoa.numeroDocumento = modeloBling.data.numeroDocumento || null;
+    pessoa.rg = modeloBling.data.rg || null;
+    pessoa.email = modeloBling.data.email;
+    pessoa.orgaoEmissor = modeloBling.data.orgaoEmissor;
+    pessoa.situacao = modeloBling.data.situacao === 'A' ? 1 : 0;
 
-      return from(repo.findOne({ where: { idOriginal: idOriginal.toFixed(0) } })).pipe(
-        switchMap((pessoa) => {
-          if (!pessoa) {
-            return timer(TIMER_DELAY_MS).pipe(
-              switchMap(() => this.buscarESalvar(idOriginal, blingService)),
-            );
-          } else return of(pessoa);
-        }),
-        switchMap((pessoa) => {
-          return forkJoin({ fornecedor: from(query.getOne()), pessoa: of(pessoa) });
-        }),
-        switchMap((values) => {
-          if (!values.fornecedor) {
-            values.fornecedor = new Fornecedor();
-            values.fornecedor.pessoa = values.pessoa;
-            values.fornecedor.situacao = 1;
-          }
-
-          if (values.fornecedor.id) return of(values.fornecedor);
-          else {
-            return from(repoFornecedor.save(values.fornecedor));
-          }
-        }),
-      );
+    if (modeloBling.data.tipo === 'F') {
+      pessoa.tipoPessoa = 'F';
+      pessoa.sexo = modeloBling.data.dadosAdicionais?.sexo;
+      pessoa.dataNascimento = this.toDate(modeloBling.data.dadosAdicionais.dataNascimento);
+      pessoa.naturalidade = modeloBling.data.dadosAdicionais?.naturalidade;
+    } else {
+      pessoa.tipoPessoa = 'J';
     }
+
+    const cep = (modeloBling.data.endereco.geral.cep as string).replace(/\D/g, '').trim();
+    const municipio = (modeloBling.data.endereco.geral.municipio as string).trim();
+    const uf = (modeloBling.data.endereco.geral.uf as string).trim();
+
+    if (municipio.length > 0 && uf.length > 0) {
+      let endereco: PessoaEndereco;
+
+      if (pessoa.enderecos && pessoa.enderecos.length > 0) {
+        // Atualiza o endereço existente
+        endereco = pessoa.enderecos[0]; // Considerando apenas o primeiro endereço para simplificar
+      } else {
+        // Cria um novo endereço
+        endereco = new PessoaEndereco();
+        pessoa.enderecos = [endereco];
+      }
+
+      endereco.cep = cep;
+      endereco.bairro = modeloBling.data.endereco.geral.bairro;
+      endereco.municipio = municipio;
+      endereco.uf = uf as IUF;
+      endereco.complemento = modeloBling.data.endereco.geral.complemento;
+      endereco.numero = modeloBling.data.endereco.geral.numero;
+    }
+
+    return repo.save(pessoa);
   }
 
-  buscarControle(): Observable<ControleImportacao> {
+  async seleciona(idOriginal: number, blingService: Bling): Promise<Pessoa> {
+    if (!idOriginal) return null;
+    const repo = this.dataSource.getRepository(Pessoa);
+    let pessoa = await repo.findOne({ where: { idOriginal: idOriginal.toFixed(0) } });
+
+    if (!pessoa) {
+      await new Promise((resolve) => setTimeout(resolve, TIMER_DELAY_MS));
+      pessoa = await this.buscarESalvar(idOriginal, blingService);
+    }
+
+    return pessoa;
+  }
+
+  async selecionaFornecedor(idOriginal: number, blingService: Bling): Promise<Fornecedor> {
+    if (!idOriginal) return null;
+    const repo = this.dataSource.getRepository(Pessoa);
+    const query = this.dataSource
+      .createQueryBuilder(Fornecedor, 'f')
+      .innerJoin(Pessoa, 'p', 'f.id_pessoa = p.id')
+      .where('p.id_original = :id', { id: idOriginal });
+    const repoFornecedor = this.dataSource.getRepository(Fornecedor);
+
+    let pessoa = await repo.findOne({ where: { idOriginal: idOriginal.toFixed(0) } });
+
+    if (!pessoa) {
+      await new Promise((resolve) => setTimeout(resolve, TIMER_DELAY_MS));
+      pessoa = await this.buscarESalvar(idOriginal, blingService);
+    }
+
+    let fornecedor = await query.getOne();
+
+    if (!fornecedor) {
+      fornecedor = new Fornecedor();
+      fornecedor.pessoa = pessoa;
+      fornecedor.situacao = 1;
+    }
+
+    if (!fornecedor.id) {
+      fornecedor = await repoFornecedor.save(fornecedor);
+    }
+
+    return fornecedor;
+  }
+
+  async buscarControle(): Promise<ControleImportacao> {
     const repo = this.dataSource.getRepository(ControleImportacao);
-    return from(repo.find({ where: { tabela: this.tabela } })).pipe(
-      switchMap((consulta) => of(consulta.length > 0 ? consulta[0] : this.criarNovoControle())),
-      switchMap((controle) => from(repo.save(controle))),
-    );
+    let controle = await repo.findOne({ where: { tabela: this.tabela } });
+
+    if (!controle) {
+      controle = this.criarNovoControle();
+    }
+
+    return repo.save(controle);
   }
 
   toDate(dateAsString: string): Date {
@@ -301,10 +248,10 @@ export class PessoaImportacao implements OnModuleInit {
     return controle;
   }
 
-  atualizarControle(
+  async atualizarControle(
     controle: ControleImportacao,
     paginaOuItem: 'pagina' | 'index',
-  ): Observable<ControleImportacao> {
+  ): Promise<ControleImportacao> {
     const repo = this.dataSource.getRepository(ControleImportacao);
 
     if (paginaOuItem == 'index') {
@@ -313,6 +260,7 @@ export class PessoaImportacao implements OnModuleInit {
       controle.pagina += 1;
       controle.ultimoIndexProcessado = -1;
     }
-    return from(repo.save(controle));
+
+    return repo.save(controle);
   }
 }

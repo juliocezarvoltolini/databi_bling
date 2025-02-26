@@ -6,25 +6,22 @@ import { IFindResponse as VendedorBling } from 'bling-erp-api/lib/entities/vende
 import {
   catchError,
   concatMap,
-  EMPTY,
   forkJoin,
   from,
   map,
-  mergeMap,
   Observable,
   of,
   switchMap,
   tap,
   timer,
 } from 'rxjs';
-import { ControleImportacao } from 'src/controle-importacao/entities/controle-importacao.entity';
-import { AuthBlingService } from 'src/integracao/bling/auth-bling.service';
+import { ControleImportacao } from 'src/app/controle-importacao/entities/controle-importacao.entity';
+import { AuthBlingService } from 'src/app/integracao/bling/auth-bling.service';
 import { DataSource, Repository } from 'typeorm';
 import { logger } from 'src/logger/winston.logger';
-import { Vendedor } from 'src/vendedor/entities/vendedor.entity';
+import { Vendedor } from 'src/app/vendedor/entities/vendedor.entity';
 import { PessoaImportacao } from '../pessoa-importacao';
-import { fork } from 'child_process';
-import { VendedorComissao } from 'src/vendedor/entities/vendedor-comissao.entity';
+import { VendedorComissao } from 'src/app/vendedor/entities/vendedor-comissao.entity';
 
 const REQUEST_LIMIT_MESSAGE =
   'O limite de requisições por segundo foi atingido, tente novamente mais tarde.';
@@ -85,7 +82,7 @@ export class VendedorImportacao implements OnModuleInit {
         timer(350).pipe(switchMap(() => this.buscarESalvar(planoBling.id, blingService))),
       ),
       tap(() => {
-        let index = controle.ultimoIndexProcessado + 1;
+        const index = controle.ultimoIndexProcessado + 1;
         logger.info(`INDEX ${index}`);
         this.atualizarControle(controle, 'index');
       }),
@@ -166,7 +163,7 @@ export class VendedorImportacao implements OnModuleInit {
     ).pipe(
       switchMap((consulta) => {
         if (consulta.length > 0) {
-          logger.info('Encontrou o vendedor')
+          logger.info('Encontrou o vendedor');
           return of(consulta[0]);
         } else {
           return this.criarVendedor(modeloBling, blingService);
@@ -176,7 +173,7 @@ export class VendedorImportacao implements OnModuleInit {
   }
 
   private criarVendedor(modeloBling: VendedorBling, blingService: Bling): Observable<Vendedor> {
-    let repo = this.dataSource.getRepository(Vendedor);
+    const repo = this.dataSource.getRepository(Vendedor);
     return forkJoin({
       pessoa: this.pessoaImportacao.seleciona(modeloBling.data.contato.id, blingService),
       vendedor: from(repo.findOne({ where: { idOriginal: modeloBling.data.id.toFixed(0) } })),
@@ -199,7 +196,7 @@ export class VendedorImportacao implements OnModuleInit {
             modeloBling.data.comissoes[0].descontoMaximo;
         }
 
-        values.vendedor.situacao = 1
+        values.vendedor.situacao = 1;
 
         return of(values.vendedor);
       }),

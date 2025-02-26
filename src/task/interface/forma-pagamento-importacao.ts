@@ -17,11 +17,11 @@ import {
   tap,
   timer,
 } from 'rxjs';
-import { AuthBlingService } from 'src/integracao/bling/auth-bling.service';
+import { AuthBlingService } from 'src/app/integracao/bling/auth-bling.service';
 import { DataSource, Repository } from 'typeorm';
 import { logger } from 'src/logger/winston.logger';
-import { ControleImportacao } from 'src/controle-importacao/entities/controle-importacao.entity';
-import { FormaPagamento } from 'src/forma-pagamento/entities/forma-pagamento.entity';
+import { ControleImportacao } from 'src/app/controle-importacao/entities/controle-importacao.entity';
+import { FormaPagamento } from 'src/app/forma-pagamento/entities/forma-pagamento.entity';
 
 const REQUEST_LIMIT_MESSAGE =
   'O limite de requisições por segundo foi atingido, tente novamente mais tarde.';

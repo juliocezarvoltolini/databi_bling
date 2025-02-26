@@ -19,22 +19,22 @@ import {
   timer,
   toArray,
 } from 'rxjs';
-import { ControleImportacao } from 'src/controle-importacao/entities/controle-importacao.entity';
-import { AuthBlingService } from 'src/integracao/bling/auth-bling.service';
+import { ControleImportacao } from 'src/app/controle-importacao/entities/controle-importacao.entity';
+import { AuthBlingService } from 'src/app/integracao/bling/auth-bling.service';
 import { DataSource, Repository } from 'typeorm';
 import { logger } from 'src/logger/winston.logger';
-import { ContaPagar } from 'src/conta/conta-pagar/entities/conta-pagar.entity';
-import { contaPagarSituacao } from 'src/conta/conta-pagar/entities/conta-pagar.types';
+import { ContaPagar } from 'src/app/conta/conta-pagar/entities/conta-pagar.entity';
+import { contaPagarSituacao } from 'src/app/conta/conta-pagar/entities/conta-pagar.types';
 import { FormaPagamentoImportacao } from './interface/forma-pagamento-importacao';
 import { PlanoContaImportacao } from './plano-conta-importacao';
 import { PessoaImportacao } from './pessoa-importacao';
 import { PortadorImportacao } from './portador-importacao';
-import { ResponseLog } from 'src/response-log/entities/response-log.entity';
-import { Pagamento } from 'src/conta/conta-pagar/pagamento/entities/pagamento.entity';
+import { ResponseLog } from 'src/app/response-log/entities/response-log.entity';
+import { Pagamento } from 'src/app/conta/conta-pagar/pagamento/entities/pagamento.entity';
 import { Borderos } from 'bling-erp-api/lib/entities/borderos';
 import { IFindSuccessResponse as Bordero } from 'bling-erp-api/lib/entities/borderos/interfaces/find.interface';
 import { response } from 'express';
-import { AppMath } from 'src/common/util/operacoes-matematicas/app-math-operations';
+import { AppMath } from 'src/shared/util/operacoes-matematicas/app-math-operations';
 
 const REQUEST_LIMIT_MESSAGE =
   'O limite de requisições por segundo foi atingido, tente novamente mais tarde.';

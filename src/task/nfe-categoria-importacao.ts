@@ -18,11 +18,11 @@ import {
   timer,
   toArray,
 } from 'rxjs';
-import { ControleImportacao } from 'src/controle-importacao/entities/controle-importacao.entity';
-import { AuthBlingService } from 'src/integracao/bling/auth-bling.service';
+import { ControleImportacao } from 'src/app/controle-importacao/entities/controle-importacao.entity';
+import { AuthBlingService } from 'src/app/integracao/bling/auth-bling.service';
 import { DataSource, Repository } from 'typeorm';
 import { logger } from 'src/logger/winston.logger';
-import { NfeCategoria } from 'src/nfe/nfe-categoria/entities/nfe-categoria.entity';
+import { NfeCategoria } from 'src/app/nfe/nfe-categoria/entities/nfe-categoria.entity';
 import ISituacao from 'bling-erp-api/lib/entities/@shared/types/situacao.type';
 import { IPadrao } from 'bling-erp-api/lib/entities/naturezasDeOperacoes/types/padrao.type';
 import { connect } from 'http2';

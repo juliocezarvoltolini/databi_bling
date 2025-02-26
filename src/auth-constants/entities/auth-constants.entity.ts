@@ -1,4 +1,4 @@
-import { Empresa } from "src/empresa/entities/empresa.entity";
+import { Empresa } from "src/app/empresa/entities/empresa.entity";
 import { Column, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from "typeorm";
 
 @Entity({name: 'auth_constants'})

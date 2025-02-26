@@ -17,15 +17,15 @@ import {
   tap,
   timer,
 } from 'rxjs';
-import { IUF } from 'src/common/types/uf.types';
-import { Assigned } from 'src/common/util/object/object.util';
-import { ControleImportacaoService } from 'src/controle-importacao/controle-importacao.service';
-import { ControleImportacao } from 'src/controle-importacao/entities/controle-importacao.entity';
-import { AuthBlingService } from 'src/integracao/bling/auth-bling.service';
+import { IUF } from 'src/shared/types/uf.types';
+import { Assigned } from 'src/shared/util/object/object.util';
+import { ControleImportacaoService } from 'src/app/controle-importacao/controle-importacao.service';
+import { ControleImportacao } from 'src/app/controle-importacao/entities/controle-importacao.entity';
+import { AuthBlingService } from 'src/app/integracao/bling/auth-bling.service';
 import { logger } from 'src/logger/winston.logger';
-import { PessoaEndereco } from 'src/pessoa/entities/pessoa-endereco.entity';
-import { Pessoa } from 'src/pessoa/entities/pesssoa.entity';
-import { PessoaService } from 'src/pessoa/pessoa.service';
+import { PessoaEndereco } from 'src/app/pessoa/entities/pessoa-endereco.entity';
+import { Pessoa } from 'src/app/pessoa/entities/pesssoa.entity';
+import { PessoaService } from 'src/app/pessoa/pessoa.service';
 import { DataSource, QueryFailedError, SelectQueryBuilder } from 'typeorm';
 
 

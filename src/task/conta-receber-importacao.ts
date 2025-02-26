@@ -17,8 +17,8 @@ import {
   tap,
   timer,
 } from 'rxjs';
-import { ControleImportacao } from 'src/controle-importacao/entities/controle-importacao.entity';
-import { AuthBlingService } from 'src/integracao/bling/auth-bling.service';
+import { ControleImportacao } from 'src/app/controle-importacao/entities/controle-importacao.entity';
+import { AuthBlingService } from 'src/app/integracao/bling/auth-bling.service';
 import { DataSource, Repository } from 'typeorm';
 import { logger } from 'src/logger/winston.logger';
 
@@ -26,10 +26,10 @@ import { FormaPagamentoImportacao } from './interface/forma-pagamento-importacao
 import { PlanoContaImportacao } from './plano-conta-importacao';
 import { PessoaImportacao } from './pessoa-importacao';
 import { PortadorImportacao } from './portador-importacao';
-import { ResponseLog } from 'src/response-log/entities/response-log.entity';
-import { ContaReceber } from 'src/conta/conta-receber/entities/conta-receber.entity';
+import { ResponseLog } from 'src/app/response-log/entities/response-log.entity';
+import { ContaReceber } from 'src/app/conta/conta-receber/entities/conta-receber.entity';
 import { IUpdateResponse } from 'bling-erp-api/lib/entities/contasReceber/interfaces/update.interface';
-import { contaReceberSituacao } from 'src/conta/conta-receber/entities/conta-receber.types';
+import { contaReceberSituacao } from 'src/app/conta/conta-receber/entities/conta-receber.types';
 
 const REQUEST_LIMIT_MESSAGE =
   'O limite de requisições por segundo foi atingido, tente novamente mais tarde.';

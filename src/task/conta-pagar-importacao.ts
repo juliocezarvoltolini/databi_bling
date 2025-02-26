@@ -17,17 +17,17 @@ import {
   tap,
   timer,
 } from 'rxjs';
-import { ControleImportacao } from 'src/controle-importacao/entities/controle-importacao.entity';
-import { AuthBlingService } from 'src/integracao/bling/auth-bling.service';
+import { ControleImportacao } from 'src/app/controle-importacao/entities/controle-importacao.entity';
+import { AuthBlingService } from 'src/app/integracao/bling/auth-bling.service';
 import { DataSource, Repository } from 'typeorm';
 import { logger } from 'src/logger/winston.logger';
-import { ContaPagar } from 'src/conta/conta-pagar/entities/conta-pagar.entity';
-import { contaPagarSituacao } from 'src/conta/conta-pagar/entities/conta-pagar.types';
+import { ContaPagar } from 'src/app/conta/conta-pagar/entities/conta-pagar.entity';
+import { contaPagarSituacao } from 'src/app/conta/conta-pagar/entities/conta-pagar.types';
 import { FormaPagamentoImportacao } from './interface/forma-pagamento-importacao';
 import { PlanoContaImportacao } from './plano-conta-importacao';
 import { PessoaImportacao } from './pessoa-importacao';
 import { PortadorImportacao } from './portador-importacao';
-import { ResponseLog } from 'src/response-log/entities/response-log.entity';
+import { ResponseLog } from 'src/app/response-log/entities/response-log.entity';
 import { IUpdateResponse } from 'bling-erp-api/lib/entities/contasPagar/interfaces/update.interface';
 
 const REQUEST_LIMIT_MESSAGE =

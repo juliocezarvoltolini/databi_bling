@@ -5,6 +5,6 @@ import { DataBaseModule } from 'src/data-base/data-base.module';
 @Module({
   imports: [DataBaseModule],
   providers: [AuthConstantsService],
-  exports: [AuthConstantsService]
+  exports: [AuthConstantsService],
 })
 export class AuthModule {}

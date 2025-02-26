@@ -6,7 +6,6 @@ import { IFindResponse as ProdutoBling } from 'bling-erp-api/lib/entities/produt
 import {
   catchError,
   concatMap,
-  EMPTY,
   forkJoin,
   from,
   map,
@@ -18,21 +17,20 @@ import {
   timer,
   toArray,
 } from 'rxjs';
-import { ControleImportacao } from 'src/controle-importacao/entities/controle-importacao.entity';
-import { AuthBlingService } from 'src/integracao/bling/auth-bling.service';
+import { ControleImportacao } from 'src/app/controle-importacao/entities/controle-importacao.entity';
+import { AuthBlingService } from 'src/app/integracao/bling/auth-bling.service';
 import { DataSource, Repository } from 'typeorm';
 
 import { logger } from 'src/logger/winston.logger';
-import { Produto } from 'src/produto/entities/produto.entity';
-import { fork } from 'child_process';
+import { Produto } from 'src/app/produto/entities/produto.entity';
 import { PessoaImportacao } from '../pessoa-importacao';
 import {
   ProdutoCategoria,
   ProdutoCategoriaOpcao,
   ProdutoCategoriaRelacao,
-} from 'src/produto/entities/produto-categoria.entity';
-import { ProdutoCategoriaTipo } from 'src/produto/entities/produto.types';
-import { ResponseLog } from 'src/response-log/entities/response-log.entity';
+} from 'src/app/produto/entities/produto-categoria.entity';
+import { ProdutoCategoriaTipo } from 'src/app/produto/entities/produto.types';
+import { ResponseLog } from 'src/app/response-log/entities/response-log.entity';
 
 const REQUEST_LIMIT_MESSAGE =
   'O limite de requisições por segundo foi atingido, tente novamente mais tarde.';
@@ -88,6 +86,7 @@ export class ProdutoImportacao implements OnModuleInit {
       });
   }
 
+  //TO DO: Carry out the necessary validations required by Prettier
   private processarPagina(blingService: Bling, controle: ControleImportacao): Observable<Produto> {
     return this.buscarPagina(controle.pagina, blingService).pipe(
       switchMap((lista) => {
@@ -99,7 +98,7 @@ export class ProdutoImportacao implements OnModuleInit {
         timer(350).pipe(switchMap(() => this.buscarESalvar(planoBling.id, blingService))),
       ),
       tap(() => {
-        let index = controle.ultimoIndexProcessado + 1;
+        const index = controle.ultimoIndexProcessado + 1;
         logger.info(`INDEX ${index}`);
         this.atualizarControle(controle, 'index');
       }),
@@ -175,22 +174,25 @@ export class ProdutoImportacao implements OnModuleInit {
     );
   }
 
-
   private saveResponseLog(modeloBling: ProdutoBling) {
-    let responseLogRepo = this.dataSource.getRepository(ResponseLog);
-    from(responseLogRepo.findOne({where: {
-      idOriginal: modeloBling.data.id.toFixed(0),
-      nomeInformacao: 'produto'
-    }})).pipe(
-      map(response => {
-        if(!response) response = new ResponseLog();
+    const responseLogRepo = this.dataSource.getRepository(ResponseLog);
+    from(
+      responseLogRepo.findOne({
+        where: {
+          idOriginal: modeloBling.data.id.toFixed(0),
+          nomeInformacao: 'produto',
+        },
+      }),
+    ).pipe(
+      map((response) => {
+        if (!response) response = new ResponseLog();
         response.idOriginal = modeloBling.data.id.toFixed(0);
         response.nomeInformacao = 'produto';
         response.response = JSON.stringify(modeloBling);
 
         responseLogRepo.save(response);
-      })
-    )
+      }),
+    );
   }
 
   private selecionaOuAssina(
@@ -221,7 +223,7 @@ export class ProdutoImportacao implements OnModuleInit {
     opcaoName: string,
     categoriaTipo: ProdutoCategoriaTipo = 'V',
   ): Observable<ProdutoCategoriaOpcao> {
-    let categoriaRepo = this.dataSource.getRepository(ProdutoCategoria);
+    const categoriaRepo = this.dataSource.getRepository(ProdutoCategoria);
     return from(
       categoriaRepo.find({
         where: { nome: categoriaName },
@@ -234,7 +236,6 @@ export class ProdutoImportacao implements OnModuleInit {
         const opcaoEncontrada = categoriaEncontrada?.opcoes?.find((o) => o.nome === opcaoName);
 
         let categoria: ProdutoCategoria;
-        let opcao: ProdutoCategoriaOpcao;
 
         // Verifica se a categoria e a opção já existem
         if (categoriaEncontrada) {
@@ -251,7 +252,7 @@ export class ProdutoImportacao implements OnModuleInit {
         }
 
         // Cria nova opção
-        opcao = new ProdutoCategoriaOpcao();
+        const opcao = new ProdutoCategoriaOpcao();
         opcao.nome = opcaoName;
         opcao.produtoCategoria = categoria;
         categoria.opcoes.push(opcao);
@@ -327,8 +328,8 @@ export class ProdutoImportacao implements OnModuleInit {
         )
         .pipe(
           switchMap((responseLog) => {
-            let object = JSON.parse(responseLog.response);
-            let categoria: string = object.data.descricao;
+            const object = JSON.parse(responseLog.response);
+            const categoria: string = object.data.descricao;
             return this.getOpcao('CATEGORIA', categoria.toUpperCase(), 'C');
           }),
         );
@@ -377,12 +378,11 @@ export class ProdutoImportacao implements OnModuleInit {
           relacoes: ProdutoCategoriaRelacao[],
           opcoes: ProdutoCategoriaOpcao[],
         ): ProdutoCategoriaRelacao[] => {
-
           if (!opcoes) return [];
 
           if (!opcoes[0]) return [];
 
-          let novasRelacoes = opcoes.map((opcao) => {
+          const novasRelacoes = opcoes.map((opcao) => {
             const relacao = new ProdutoCategoriaRelacao();
             relacao.produtoCategoriaOpcao = opcao;
             return relacao;
@@ -421,9 +421,7 @@ export class ProdutoImportacao implements OnModuleInit {
       return from(repo.findOne({ where: { idOriginal: idOriginal.toFixed(0) } })).pipe(
         switchMap((produto) => {
           if (!produto) {
-            return timer(200).pipe(
-              switchMap(() => this.buscarESalvar(idOriginal, blingService)),
-            );
+            return timer(200).pipe(switchMap(() => this.buscarESalvar(idOriginal, blingService)));
           } else return of(produto);
         }),
       );

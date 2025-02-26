@@ -1,18 +1,12 @@
-import { HttpService } from '@nestjs/axios';
 import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
-import { Cron, CronExpression, Interval } from '@nestjs/schedule';
 import Bling from 'bling-erp-api';
 import { IFindResponse } from 'bling-erp-api/lib/entities/pedidosVendas/interfaces/find.interface';
 import { IGetResponse } from 'bling-erp-api/lib/entities/pedidosVendas/interfaces/get.interface';
 import {
   catchError,
   concatMap,
-  defer,
-  first,
-  firstValueFrom,
   forkJoin,
   from,
-  interval,
   map,
   mergeMap,
   Observable,
@@ -24,28 +18,23 @@ import {
   timer,
   toArray,
 } from 'rxjs';
-import { IUF } from 'src/common/types/uf.types';
-import { Assigned } from 'src/common/util/object/object.util';
-import { AppMath } from 'src/common/util/operacoes-matematicas/app-math-operations';
-import { ControleImportacaoService } from 'src/controle-importacao/controle-importacao.service';
-import { ControleImportacao } from 'src/controle-importacao/entities/controle-importacao.entity';
-import { Empresa } from 'src/empresa/entities/empresa.entity';
-import { AuthBlingService } from 'src/integracao/bling/auth-bling.service';
+import { AppMath } from 'src/shared/util/operacoes-matematicas/app-math-operations';
+import { ControleImportacaoService } from 'src/app/controle-importacao/controle-importacao.service';
+import { ControleImportacao } from 'src/app/controle-importacao/entities/controle-importacao.entity';
+import { Empresa } from 'src/app/empresa/entities/empresa.entity';
+import { AuthBlingService } from 'src/app/integracao/bling/auth-bling.service';
 import { logger } from 'src/logger/winston.logger';
-import { Pessoa } from 'src/pessoa/entities/pesssoa.entity';
-import { Produto } from 'src/produto/entities/produto.entity';
-import { Venda } from 'src/venda/entities/venda.entity';
-import { VendaService } from 'src/venda/venda.service';
-import { Vendedor } from 'src/vendedor/entities/vendedor.entity';
-import { DataSource, QueryFailedError, Repository, SelectQueryBuilder } from 'typeorm';
+import { Produto } from 'src/app/produto/entities/produto.entity';
+import { Venda } from 'src/app/venda/entities/venda.entity';
+import { VendaService } from 'src/app/venda/venda.service';
+import { DataSource } from 'typeorm';
 import { ImportCliente } from './task.interface';
-import { Item } from 'src/venda/item/entities/item.entity';
-import { VendaPagamento } from 'src/venda/pagamento/entities/venda-pagamento.entity';
-import { FormaPagamento } from 'src/forma-pagamento/entities/forma-pagamento.entity';
+import { Item } from 'src/app/venda/item/entities/item.entity';
+import { VendaPagamento } from 'src/app/venda/pagamento/entities/venda-pagamento.entity';
+import { FormaPagamento } from 'src/app/forma-pagamento/entities/forma-pagamento.entity';
 import { VendedorImportacao } from './vendedor-importacao';
 import { PessoaImportacao } from '../pessoa-importacao';
 import { ProdutoImportacao } from './produto-importacao';
-
 
 class ItemBling {
   id: number;
@@ -131,7 +120,7 @@ export class VendaImportacao implements OnModuleInit {
         error: (err) => {
           if (err.name == 'zero') {
             console.log('DATA ANTES: ', controleImportacao.data);
-            let novaData = new Date(controleImportacao.data);
+            const novaData = new Date(controleImportacao.data);
             novaData.setDate(novaData.getDate() + 1);
             controleImportacao.data = novaData;
             console.log('DATA DEPOIS: ', controleImportacao.data);
@@ -147,7 +136,7 @@ export class VendaImportacao implements OnModuleInit {
               .where('tabela = :tabela', { tabela: 'venda' })
               .execute()
               .then(
-                (ret) => this.iniciar(), // Processa a próxima página
+                () => this.iniciar(), // Processa a próxima página
               );
 
             // this.controleImportacaoService.repository.save(controleImportacao, {}).then(
@@ -161,7 +150,7 @@ export class VendaImportacao implements OnModuleInit {
           controleImportacao.ultimoIndexProcessado = -1;
           console.log(`Página ${controleImportacao.pagina} processada com sucesso.`);
           this.controleImportacaoService.repository.save(controleImportacao).then(
-            (ret) => this.iniciar(), // Processa a próxima página
+            () => this.iniciar(), // Processa a próxima página
           );
         },
       });
@@ -218,9 +207,11 @@ export class VendaImportacao implements OnModuleInit {
   private RemoverItens(venda: Venda): Observable<any> {
     console.log('TESTE');
     const item = this.dataSource.getRepository(Item).delete({ venda: { id: venda.id } });
-    const pagamento = this.dataSource.getRepository(VendaPagamento).delete({ venda: { id: venda.id } });
+    const pagamento = this.dataSource
+      .getRepository(VendaPagamento)
+      .delete({ venda: { id: venda.id } });
 
-    let retorno = Promise.all([item, pagamento]);
+    const retorno = Promise.all([item, pagamento]);
 
     console.log('TESTE');
 
@@ -231,7 +222,7 @@ export class VendaImportacao implements OnModuleInit {
   private SalvarResposta(
     response: IGetResponse,
     controleImportacao: ControleImportacao,
-    blingService: Bling
+    blingService: Bling,
   ): Observable<Venda> {
     const itensRestantes = response.data.slice(controleImportacao.ultimoIndexProcessado + 1);
     return from(itensRestantes).pipe(
@@ -244,7 +235,7 @@ export class VendaImportacao implements OnModuleInit {
             return this.mapearVenda(vendaCompleta, blingService).pipe(
               switchMap((venda) => {
                 return this.Salvar(venda).pipe(
-                  tap((value) => {
+                  tap(() => {
                     this.AtualizarContadorRegistroProcessado(controleImportacao);
                   }),
                 );
@@ -342,7 +333,6 @@ export class VendaImportacao implements OnModuleInit {
     );
   }
 
-
   private encontrarProduto(id: number): Observable<Produto> {
     const repo = this.dataSource.getRepository(Produto);
     return from(repo.findOne({ where: { idOriginal: id.toFixed(0) } })).pipe(
@@ -362,7 +352,6 @@ export class VendaImportacao implements OnModuleInit {
     return from(itens)
       .pipe(
         mergeMap((value, index) => {
-          const repo = this.dataSource.getRepository(Produto);
           return forkJoin({
             produto: this.encontrarProduto(value.produto.id),
             item: of(value),
@@ -371,10 +360,12 @@ export class VendaImportacao implements OnModuleInit {
         }),
       )
       .pipe(
-        reduce((acc: Item[], value, index) => {
+        reduce((acc: Item[], value) => {
           const item = new Item();
           let precoVenda =
-            value.produto.valorPreco > 0.0 ? value.produto.valorPreco : AppMath.divide(value.item.valor, value.item.quantidade);
+            value.produto.valorPreco > 0.0
+              ? value.produto.valorPreco
+              : AppMath.divide(value.item.valor, value.item.quantidade);
 
           //TEM PRODUTOS QUE O PREÇO DE VENDA É IGUAL A ZERO
           //SE HOUVER DESCONTO, PRECISO ENCONTRAR O PREÇO SEM DESCONTO
@@ -415,9 +406,8 @@ export class VendaImportacao implements OnModuleInit {
   ) {
     let resto = desconto;
     itens.forEach((item, index) => {
-
-      let subtotal = AppMath.multiply(item.quantidade, item.valor);
-      let proporcao = AppMath.divide(subtotal, totalizadores.subtotal, 10);
+      const subtotal = AppMath.multiply(item.quantidade, item.valor);
+      const proporcao = AppMath.divide(subtotal, totalizadores.subtotal, 10);
       let descontoItem = AppMath.multiply(proporcao, desconto);
       if (descontoItem > resto || index == itens.length - 1) {
         descontoItem = resto;
@@ -425,7 +415,7 @@ export class VendaImportacao implements OnModuleInit {
 
       if (descontoItem > 0.0) {
         item.desconto_valor = AppMath.sum(item.desconto_valor, descontoItem);
-        item.desconto_percentual = AppMath.divide(item.desconto_valor, subtotal,4);
+        item.desconto_percentual = AppMath.divide(item.desconto_valor, subtotal, 4);
         item.desconto_percentual = AppMath.multiply(item.desconto_percentual, 100);
         item.total = AppMath.sum(subtotal, -item.desconto_valor);
       }
@@ -478,7 +468,7 @@ export class VendaImportacao implements OnModuleInit {
     venda.total = res.total;
 
     return forkJoin({
-      vendedor:  this.vendedorImportacao.seleciona(res.vendedor.id, blingService),
+      vendedor: this.vendedorImportacao.seleciona(res.vendedor.id, blingService),
       pessoa: this.pessoaImportacao.seleciona(res.contato.id, blingService),
       itens: this.mapearItens(res.itens, venda.dataSaida),
       pagamentos: this.mapearPagamentos(res.parcelas, venda.dataSaida),
