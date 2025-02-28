@@ -1,14 +1,15 @@
 import { lastValueFrom } from 'rxjs';
-import { BlingService } from 'src/app/bling-service/service/bling-service';
 import {
   getItensRestantes,
   updateDateOfSearchParameters,
 } from 'src/app/bling-service/utils/bling-utils';
 import { ControleImportacaoService } from 'src/app/controle-importacao/controle-importacao.service';
 import { ControleImportacao } from 'src/app/controle-importacao/entities/controle-importacao.entity';
+import { ResponseLog } from 'src/app/response-log/entities/response-log.entity';
+import { ResponseLogService } from 'src/app/response-log/response-log.service';
 
-export class BlingCollection<Entity extends { id: number }> {
-  data: Partial<Entity>[];
+export class BlingCollection<BlingEntity extends { id: number }> {
+  data: Partial<BlingEntity>[];
 }
 
 export enum PaginacaoType {
@@ -16,17 +17,79 @@ export enum PaginacaoType {
   INDEX = 'index',
 }
 
-export interface ImportacaoService<Entity, BlingEntity extends { id: number }> {
-  start(): Promise<void>;
+export interface ImportService<Entity, BlingEntity extends { id: number }> {
   selectEntity(Id: number): Promise<Entity>;
+  getCachedEntity(id: number, entity: string): Promise<{ cache: ResponseLog; entity: BlingEntity }>;
+  saveCachedEntity(
+    entity: string,
+    id: string,
+    blingEntity: BlingEntity,
+    response?: ResponseLog,
+  ): Promise<void>;
+}
+
+export abstract class ImportacaoServiceBase<Entity, BlingEntity extends { id: number }>
+  implements ImportService<Entity, BlingEntity>
+{
+  constructor(private readonly responseLogService: ResponseLogService) {}
+  async saveCachedEntity(
+    entity: string,
+    id: string,
+    blingEntity: BlingEntity,
+    response?: ResponseLog,
+  ): Promise<void> {
+    if (!response) {
+      response = new ResponseLog();
+      response.idOriginal = id;
+      response.nomeInformacao = entity;
+      response.response = JSON.stringify(blingEntity);
+      response.data = new Date();
+    } else {
+      response.response = JSON.stringify(blingEntity);
+      response.data = new Date();
+    }
+    if (response.id) {
+      await lastValueFrom(this.responseLogService.update(response.id, response));
+      return;
+    }
+    await lastValueFrom(this.responseLogService.create(response));
+    return;
+  }
+
+  async getCachedEntity(
+    id: number,
+    entity: string,
+  ): Promise<{ cache: ResponseLog; entity: BlingEntity }> {
+    const response = await lastValueFrom(
+      this.responseLogService.find({ idOriginal: id.toFixed(0), nomeInformacao: entity }),
+    );
+    const [first] = response;
+    if (!first) return null;
+    return { cache: first, entity: JSON.parse(first.response) };
+  }
+
+  abstract selectEntity(Id: number): Promise<Entity>;
+}
+
+export interface PagedImportService<Entity, BlingEntity extends { id: number }> {
+  start(): Promise<void>;
   searchPage(searchParameters: Record<string, any>): Promise<BlingCollection<BlingEntity>>;
   readAndSave(blingEntity: Partial<BlingEntity>): Promise<Entity>;
 }
 
-export abstract class ImportacaoServiceBase<Entity, BlingEntity extends { id: number }>
-  implements ImportacaoService<Entity, BlingEntity>
+export abstract class PagedImportServiceBase<Entity, BlingEntity extends { id: number }>
+  implements PagedImportService<Entity, BlingEntity>
 {
   private controle: ControleImportacao;
+
+  abstract searchPage(searchParameters: Record<string, any>): Promise<BlingCollection<BlingEntity>>;
+  abstract readAndSave(blingEntity: Partial<BlingEntity>): Promise<Entity>;
+
+  constructor(
+    private readonly entity: string,
+    private readonly controleService: ControleImportacaoService,
+    private paginacaoType: PaginacaoType,
+  ) {}
 
   async start(): Promise<void> {
     await this.getControle();
@@ -63,17 +126,6 @@ export abstract class ImportacaoServiceBase<Entity, BlingEntity extends { id: nu
     if (itensRestantes.length == 100) return this.start();
     return;
   }
-
-  abstract selectEntity(Id: number): Promise<Entity>;
-  abstract searchPage(searchParameters: Record<string, any>): Promise<BlingCollection<BlingEntity>>;
-  abstract readAndSave(blingEntity: Partial<BlingEntity>): Promise<Entity>;
-
-  constructor(
-    private readonly entity: string,
-    private readonly blingService: BlingService,
-    private readonly controleService: ControleImportacaoService,
-    private paginacaoType: PaginacaoType,
-  ) {}
 
   private async getControle(): Promise<ControleImportacao> {
     this.controle = new ControleImportacao();
