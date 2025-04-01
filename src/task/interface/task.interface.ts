@@ -21,7 +21,7 @@ import { IUF } from 'src/shared/types/uf.types';
 import { Assigned } from 'src/shared/util/object/object.util';
 import { ControleImportacaoService } from 'src/app/controle-importacao/controle-importacao.service';
 import { ControleImportacao } from 'src/app/controle-importacao/entities/controle-importacao.entity';
-import { AuthBlingService } from 'src/app/integracao/bling/auth-bling.service';
+import { AuthBlingService } from 'src/app/bling/auth-bling.service';
 import { logger } from 'src/logger/winston.logger';
 import { PessoaEndereco } from 'src/app/pessoa/entities/pessoa-endereco.entity';
 import { Pessoa } from 'src/app/pessoa/entities/pesssoa.entity';
@@ -92,7 +92,7 @@ export class ImportCliente implements OnModuleInit {
 
   execute(contador: number, timeout: number = 1000): Observable<Pessoa | Pessoa[]> {
     try {
-      return from(this.service.getAcessToken()).pipe(
+      return from(this.service.getAccessToken()).pipe(
         switchMap((token) => {
           this.blingService = new Bling(token);
           console.log('Criou o serviço Bling.');

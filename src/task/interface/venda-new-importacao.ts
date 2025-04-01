@@ -18,7 +18,7 @@ import {
   toArray,
 } from 'rxjs';
 import { ControleImportacao } from 'src/app/controle-importacao/entities/controle-importacao.entity';
-import { AuthBlingService } from 'src/app/integracao/bling/auth-bling.service';
+import { AuthBlingService } from 'src/app/bling/auth-bling.service';
 import { DataSource, Repository } from 'typeorm';
 import { logger } from 'src/logger/winston.logger';
 import { FormaPagamentoImportacao } from './forma-pagamento-importacao';
@@ -108,7 +108,7 @@ export class VendaNewImportacao implements OnModuleInit {
 
     forkJoin({
       controle: this.buscarControle(),
-      acessToken: from(this.service.getAcessToken()),
+      acessToken: from(this.service.getAccessToken()),
     })
       .pipe(
         switchMap((values) => {

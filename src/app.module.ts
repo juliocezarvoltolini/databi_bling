@@ -11,9 +11,9 @@ import { EmpresaModule } from './app/empresa/empresa.module';
 import { ConfigModule } from '@nestjs/config';
 import { Logger } from 'winston';
 import { AuthModule } from './auth-constants/auth-constants.module';
-import blingConstants from './app/integracao/bling/bling.constants';
+
 import { ImportCliente } from './task/interface/task.interface';
-import { BlingModule } from './app/integracao/bling/bling.module';
+
 import { ScheduleModule } from '@nestjs/schedule';
 import { HttpModule } from '@nestjs/axios';
 import { ControleImportacaoModule } from './app/controle-importacao/controle-importacao.module';
@@ -34,6 +34,8 @@ import { VendaNewImportacao } from './task/interface/venda-new-importacao';
 import { PagamentoImportacao } from './task/pagamento-importacao';
 import { RecebimentoImportacao } from './task/recebimento-importacao';
 import { ContaReceberImportacao } from './task/conta-receber-importacao';
+import { BlingModule } from './app/bling/bling.module';
+import blingConstants from './app/bling/bling.constants';
 
 @Module({
   imports: [
@@ -57,6 +59,7 @@ import { ContaReceberImportacao } from './task/conta-receber-importacao';
     ResponseLogModule,
     ContaModule,
     NfeModule,
+    FornecedorModule,
   ],
   controllers: [AppController],
   providers: [

@@ -91,7 +91,7 @@ export class BaseService<A extends object> implements IService<A> {
     const idPropertyName = this.repository.metadata.primaryColumns[0].propertyName;
     const _where = {};
     _where[idPropertyName] = Equal(id);
-    console.log(_where);
+
     return defer(() => this.repository.findOne({ where: _where }));
   }
 

@@ -1,7 +1,14 @@
 import Bling from 'bling-erp-api';
-import { AuthBlingService } from '../../integracao/bling/auth-bling.service';
+import { AuthBlingService } from './auth-bling.service';
+import { Injectable, Scope } from '@nestjs/common';
 
-export class BlingService {
+const ERROS = [
+  'Não foi possível realizar a chamada HTTP: get',
+  'O limite de requisições por segundo foi atingido, tente novamente mais tarde.',
+];
+
+@Injectable({ scope: Scope.DEFAULT })
+export class BlingApiService {
   private bling: Bling;
   private lastRequest: Date;
   private acessToken: string;
@@ -9,8 +16,7 @@ export class BlingService {
   constructor(private readonly authBlingService: AuthBlingService) {}
 
   public async getBling(): Promise<Bling> {
-    const updatedAcessoToken = await this.authBlingService.getAcessToken();
-
+    const updatedAcessoToken = await this.authBlingService.getAccessToken();
     if (this.acessToken != updatedAcessoToken) {
       this.bling = new Bling(updatedAcessoToken);
       this.acessToken = updatedAcessoToken;

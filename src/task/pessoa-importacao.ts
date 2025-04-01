@@ -9,7 +9,7 @@ import { PessoaEndereco } from 'src/app/pessoa/entities/pessoa-endereco.entity';
 import { IUF } from 'src/shared/types/uf.types';
 import { Fornecedor } from 'src/app/fornecedor/entities/fornecedor.entity';
 import { ControleImportacao } from 'src/app/controle-importacao/entities/controle-importacao.entity';
-import { AuthBlingService } from 'src/app/integracao/bling/auth-bling.service';
+import { AuthBlingService } from 'src/app/bling/auth-bling.service';
 
 const REQUEST_LIMIT_MESSAGE =
   'O limite de requisições por segundo foi atingido, tente novamente mais tarde.';
@@ -33,7 +33,7 @@ export class PessoaImportacao implements OnModuleInit {
   async iniciar() {
     try {
       const controle = await this.buscarControle();
-      const acessToken = await this.service.getAcessToken();
+      const acessToken = await this.service.getAccessToken();
       const blingService = new Bling(acessToken);
 
       await this.processarPagina(blingService, controle);

@@ -1,38 +1,38 @@
-import { Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn } from "typeorm";
-import { Produto } from "./produto.entity";
-import { ProdutoCategoriaTipo } from "./produto.types";
+import { Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
+import { Produto } from './produto.entity';
+import { ProdutoCategoriaTipo } from './produto.types';
 
-@Entity({name: 'produto_categoria'})
+@Entity({ name: 'produto_categoria' })
 export class ProdutoCategoria {
-    @PrimaryGeneratedColumn({type:  'int4'})
-    id: number;
-    @Column({name: 'nome', type: 'varchar', length: 100})
-    nome: string;
-    @Column({name: 'tipo', type: 'char', length: 1, default: 'C', nullable: false})
-    tipo: ProdutoCategoriaTipo;
-    @OneToMany(() => ProdutoCategoriaOpcao, opcao => opcao.produtoCategoria, {cascade: true})
-    opcoes: ProdutoCategoriaOpcao[];
+  @PrimaryGeneratedColumn({ type: 'int4' })
+  id: number;
+  @Column({ name: 'nome', type: 'varchar', length: 100 })
+  nome: string;
+  @Column({ name: 'tipo', type: 'char', length: 1, default: 'C', nullable: false })
+  tipo: ProdutoCategoriaTipo;
+  @OneToMany(() => ProdutoCategoriaOpcao, (opcao) => opcao.produtoCategoria, { cascade: true })
+  opcoes: ProdutoCategoriaOpcao[];
 }
 
-@Entity({name: 'produto_categoria_opcao'})
+@Entity({ name: 'produto_categoria_opcao' })
 export class ProdutoCategoriaOpcao {
-    @PrimaryGeneratedColumn({type:  'int4'})
-    id: number;
-    @ManyToOne(() => ProdutoCategoria, {eager: true})
-    @JoinColumn({name: 'id_produto_categoria'})
-    produtoCategoria: ProdutoCategoria;
-    @Column({name: 'nome', type: 'varchar', length: 100})
-    nome: string;
+  @PrimaryGeneratedColumn({ type: 'int4' })
+  id: number;
+  @ManyToOne(() => ProdutoCategoria, { eager: true })
+  @JoinColumn({ name: 'id_produto_categoria' })
+  produtoCategoria: ProdutoCategoria;
+  @Column({ name: 'nome', type: 'varchar', length: 100 })
+  nome: string;
 }
 
-@Entity({name: 'produto_categoria_relacao'})
+@Entity({ name: 'produto_categoria_relacao' })
 export class ProdutoCategoriaRelacao {
-    @PrimaryGeneratedColumn({type:  'int4'})
-    id: number;
-    @ManyToOne(() => Produto)
-    @JoinColumn({name: 'id_produto', referencedColumnName: 'id'})
-    produto: Produto;
-    @ManyToOne(() => ProdutoCategoriaOpcao, {eager: true})
-    @JoinColumn({name: 'id_produto_categoria_opcao', referencedColumnName: 'id'})
-    produtoCategoriaOpcao: ProdutoCategoriaOpcao;
+  @PrimaryGeneratedColumn({ type: 'int4' })
+  id: number;
+  @ManyToOne(() => Produto)
+  @JoinColumn({ name: 'id_produto', referencedColumnName: 'id' })
+  produto: Produto;
+  @ManyToOne(() => ProdutoCategoriaOpcao, { eager: true })
+  @JoinColumn({ name: 'id_produto_categoria_opcao', referencedColumnName: 'id' })
+  produtoCategoriaOpcao: ProdutoCategoriaOpcao;
 }

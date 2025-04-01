@@ -22,7 +22,7 @@ import { AppMath } from 'src/shared/util/operacoes-matematicas/app-math-operatio
 import { ControleImportacaoService } from 'src/app/controle-importacao/controle-importacao.service';
 import { ControleImportacao } from 'src/app/controle-importacao/entities/controle-importacao.entity';
 import { Empresa } from 'src/app/empresa/entities/empresa.entity';
-import { AuthBlingService } from 'src/app/integracao/bling/auth-bling.service';
+import { AuthBlingService } from 'src/app/bling/auth-bling.service';
 import { logger } from 'src/logger/winston.logger';
 import { Produto } from 'src/app/produto/entities/produto.entity';
 import { Venda } from 'src/app/venda/entities/venda.entity';
@@ -158,7 +158,7 @@ export class VendaImportacao implements OnModuleInit {
 
   execute(contador: ControleImportacao, timeout: number = 1000): Observable<Venda | Venda[]> {
     try {
-      return from(this.service.getAcessToken()).pipe(
+      return from(this.service.getAccessToken()).pipe(
         switchMap((token) => {
           this.blingService = new Bling(token);
           logger.info('Criou o serviço Bling.');

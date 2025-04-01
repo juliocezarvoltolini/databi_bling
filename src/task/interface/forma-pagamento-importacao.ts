@@ -6,7 +6,6 @@ import { IFindResponse as FormaPagamentoBling } from 'bling-erp-api/lib/entities
 import {
   catchError,
   concatMap,
-  EMPTY,
   forkJoin,
   from,
   map,
@@ -17,11 +16,12 @@ import {
   tap,
   timer,
 } from 'rxjs';
-import { AuthBlingService } from 'src/app/integracao/bling/auth-bling.service';
+
 import { DataSource, Repository } from 'typeorm';
 import { logger } from 'src/logger/winston.logger';
 import { ControleImportacao } from 'src/app/controle-importacao/entities/controle-importacao.entity';
 import { FormaPagamento } from 'src/app/forma-pagamento/entities/forma-pagamento.entity';
+import { AuthBlingService } from 'src/app/bling/auth-bling.service';
 
 const REQUEST_LIMIT_MESSAGE =
   'O limite de requisições por segundo foi atingido, tente novamente mais tarde.';
@@ -48,7 +48,7 @@ export class FormaPagamentoImportacao implements OnModuleInit {
 
     forkJoin({
       controle: this.buscarControle(),
-      acessToken: from(this.service.getAcessToken()),
+      acessToken: from(this.service.getAccessToken()),
     })
       .pipe(
         switchMap((values) => {
@@ -81,7 +81,7 @@ export class FormaPagamentoImportacao implements OnModuleInit {
         timer(350).pipe(switchMap(() => this.buscarESalvar(planoBling.id, blingService))),
       ),
       tap(() => {
-        let index = controle.ultimoIndexProcessado + 1;
+        const index = controle.ultimoIndexProcessado + 1;
         logger.info(`INDEX ${index}`);
         this.atualizarControle(controle, 'index');
       }),

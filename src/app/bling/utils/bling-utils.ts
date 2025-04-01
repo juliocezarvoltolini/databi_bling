@@ -29,3 +29,17 @@ export function updateDateOfSearchParameters(
 export function getItensRestantes(lista: any, ultimoIndexProcessado: number): any[] {
   return lista.data.length > 0 ? lista.data.slice(ultimoIndexProcessado + 1) : [];
 }
+
+export function dateBlingToDate(dateAsString: string): Date {
+  if (dateAsString.length === 10) {
+    if (dateAsString != '0000-00-00') return new Date(`${dateAsString}T00:00:00`);
+    else return null;
+  } else if (dateAsString.length === 19) {
+    if (dateAsString != '0000-00-00 00:00:00') {
+      const [primeiraParte, segundaParte] = dateAsString.split(' ');
+      return new Date(`${primeiraParte}T${segundaParte}`);
+    } else {
+      return null;
+    }
+  }
+}
