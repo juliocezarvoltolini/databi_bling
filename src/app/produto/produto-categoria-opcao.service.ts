@@ -1,11 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { BaseService } from 'src/shared/service/service.abstract';
-import { Produto } from './entities/produto.entity';
+import { ProdutoCategoriaOpcao } from './entities/produto-categoria.entity';
 import { DataSource } from 'typeorm';
 
 @Injectable()
-export class ProdutoService extends BaseService<Produto> {
+export class ProdutoCategoriaOpcaoService extends BaseService<ProdutoCategoriaOpcao> {
   constructor(@Inject('DATA_SOURCE') private readonly dataSource: DataSource) {
-    super(dataSource.getRepository(Produto));
+    super(dataSource.getRepository(ProdutoCategoriaOpcao));
   }
 }

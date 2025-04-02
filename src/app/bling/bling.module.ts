@@ -12,6 +12,8 @@ import { BlingObservable } from './import-service/bling-observable';
 import { PessoaModule } from '../pessoa/pessoa.module';
 import { ResponseLogModule } from '../response-log/response-log.module';
 import { ControleImportacaoModule } from '../controle-importacao/controle-importacao.module';
+import { ProdutoCategoriaBlingService } from './import-service/produto/categoria-produto-bling.service';
+import { ProdutoBlingService } from './import-service/produto/produto-bling.service';
 
 @Module({
   imports: [
@@ -28,6 +30,8 @@ import { ControleImportacaoModule } from '../controle-importacao/controle-import
     PessoaBlingService,
     PessoaBlingPagedService,
     BlingObservable,
+    ProdutoCategoriaBlingService,
+    ProdutoBlingService,
   ],
   exports: [AuthBlingService],
 })
