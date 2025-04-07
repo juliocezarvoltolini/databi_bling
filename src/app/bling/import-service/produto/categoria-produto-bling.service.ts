@@ -1,7 +1,7 @@
 import { ResponseLogService } from 'src/app/response-log/response-log.service';
 import { ImportServiceBase } from '../import.interface';
 import { IFindResponse as CategoriaBling } from 'bling-erp-api/lib/entities/categoriasProdutos/interfaces/find.interface';
-import { Inject } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import {
   ProdutoCategoria,
@@ -11,6 +11,7 @@ import { BlingApiService } from '../../bling-api.service';
 import { ProdutoCategoriaOpcaoService } from 'src/app/produto/produto-categoria-opcao.service';
 import { ProdutoCategoriaTipo } from 'src/app/produto/entities/produto.types';
 
+@Injectable()
 export class ProdutoCategoriaBlingService extends ImportServiceBase<
   ProdutoCategoriaOpcao,
   CategoriaBling

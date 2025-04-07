@@ -36,9 +36,16 @@ import { RecebimentoImportacao } from './task/recebimento-importacao';
 import { ContaReceberImportacao } from './task/conta-receber-importacao';
 import { BlingModule } from './app/bling/bling.module';
 import blingConstants from './app/bling/bling.constants';
+import { LoggerModule } from './logger/logger.module';
 
 @Module({
   imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: '.env',
+      load: [blingConstants],
+    }),
+    LoggerModule,
     DataBaseModule,
     HttpModule,
     PessoaModule,
@@ -50,16 +57,12 @@ import blingConstants from './app/bling/bling.constants';
     EmpresaModule,
     AuthModule,
     BlingModule,
-    ConfigModule.forRoot({
-      isGlobal: true,
-      load: [blingConstants],
-    }),
+
     ScheduleModule.forRoot(),
     ControleImportacaoModule,
     ResponseLogModule,
     ContaModule,
     NfeModule,
-    FornecedorModule,
   ],
   controllers: [AppController],
   providers: [
@@ -81,4 +84,4 @@ import blingConstants from './app/bling/bling.constants';
     RecebimentoImportacao,
   ],
 })
-export class AppModule {}
+export class AppModule { }

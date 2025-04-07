@@ -6,7 +6,9 @@ import { firstValueFrom } from 'rxjs';
 import { logger } from 'src/logger/winston.logger';
 import { PessoaBlingService } from '../pessoa/pessoa-bling.service';
 import { FornecedorService } from 'src/app/fornecedor/fornecedor.service';
+import { Injectable } from '@nestjs/common';
 
+@Injectable()
 export class FornecedorBlingService extends ImportServiceBase<Fornecedor, FornecedorBling> {
   async getById(Id: number): Promise<Fornecedor> {
     const fornecedores = firstValueFrom(

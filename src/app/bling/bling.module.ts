@@ -13,7 +13,10 @@ import { PessoaModule } from '../pessoa/pessoa.module';
 import { ResponseLogModule } from '../response-log/response-log.module';
 import { ControleImportacaoModule } from '../controle-importacao/controle-importacao.module';
 import { ProdutoCategoriaBlingService } from './import-service/produto/categoria-produto-bling.service';
-import { ProdutoBlingService } from './import-service/produto/produto-bling.service';
+import { ProdutoBlingPagedService, ProdutoBlingService } from './import-service/produto/produto-bling.service';
+import { ProdutoModule } from '../produto/produto.module';
+import { FornecedorModule } from '../fornecedor/fornecedor.module';
+import { FornecedorBlingService } from './import-service/fornecedor/fornecedor-bling.service';
 
 @Module({
   imports: [
@@ -23,6 +26,8 @@ import { ProdutoBlingService } from './import-service/produto/produto-bling.serv
     PessoaModule,
     ResponseLogModule,
     ControleImportacaoModule,
+    ProdutoModule,
+    FornecedorModule
   ],
   providers: [
     AuthBlingService,
@@ -30,8 +35,10 @@ import { ProdutoBlingService } from './import-service/produto/produto-bling.serv
     PessoaBlingService,
     PessoaBlingPagedService,
     BlingObservable,
+    FornecedorBlingService,
     ProdutoCategoriaBlingService,
     ProdutoBlingService,
+    ProdutoBlingPagedService
   ],
   exports: [AuthBlingService],
 })

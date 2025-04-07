@@ -5,5 +5,6 @@ import { DataBaseModule } from 'src/data-base/data-base.module';
 @Module({
   imports: [DataBaseModule],
   providers: [FornecedorService],
+  exports: [FornecedorService],
 })
-export class FornecedorModule {}
+export class FornecedorModule { }

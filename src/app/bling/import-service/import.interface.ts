@@ -26,12 +26,11 @@ export interface ImportService<Entity, APIEntity extends APIResponse<APIEntity>>
 }
 
 export abstract class ImportServiceBase<Entity, APIEntity extends APIResponse<APIEntity>>
-  implements ImportService<Entity, APIEntity>
-{
+  implements ImportService<Entity, APIEntity> {
   constructor(
     protected readonly responseLogService: ResponseLogService,
     protected readonly entity: string,
-  ) {}
+  ) { }
   async saveCachedEntity(
     id: string,
     blingEntity: APIEntity,
@@ -74,8 +73,7 @@ export interface PagedImportService<Entity, APIEntity extends APIResponse<APIEnt
 }
 
 export abstract class PagedImportServiceBase<Entity, APIEntity extends APIResponse<APIEntity>>
-  implements PagedImportService<Entity, APIEntity>
-{
+  implements PagedImportService<Entity, APIEntity> {
   protected controle: ControleImportacao;
 
   abstract searchPage(searchParameters?: Record<string, any>): Promise<APICollection<APIEntity>>;
@@ -86,7 +84,7 @@ export abstract class PagedImportServiceBase<Entity, APIEntity extends APIRespon
     private readonly controleService: ControleImportacaoService,
     private paginacaoType: PaginacaoType,
     protected readonly importService: ImportService<Entity, APIEntity>,
-  ) {}
+  ) { }
 
   async start(): Promise<void> {
     logger.info(`[PagedImportService] Iniciando importação da entidade ${this.entity}`);
@@ -99,13 +97,14 @@ export abstract class PagedImportServiceBase<Entity, APIEntity extends APIRespon
     //Atualizando as propriedades que são do tipo 'date' se houverem.
     searchParameters = updateDateOfSearchParameters(searchParameters, this.controle.data);
 
+    logger.info(`[PagedImportService] Buscando na API`);
     const lista = await this.searchPage(searchParameters);
 
     //Irá pegar os itens que ainda não foram processados
     const itensRestantes = getItensRestantes(lista, this.controle.ultimoIndexProcessado);
 
     for (const item of itensRestantes) {
-      console.log(`[PagedImportService] Processando item ${JSON.stringify(item)}`);
+      logger.info(`[PagedImportService] Processando item`);
       await this.readAndSave(item);
       await this.updateIndexOfControle();
     }
@@ -123,8 +122,12 @@ export abstract class PagedImportServiceBase<Entity, APIEntity extends APIRespon
     }
 
     //Se a página possuir 100 itens, executa a função novamente para consultar se existem próximas páginas.
-    console.log(`[PagedImportService] Itens restantes: ${lista.data.length}`);
-    if (temProximaPagina) return this.start();
+
+    if (temProximaPagina) {
+      logger.info(`[PagedImportService] Tem próxima página!`);
+      return this.start();
+    }
+    logger.info(`[PagedImportService] Não tem próxima página!`);
     return;
   }
 
@@ -160,7 +163,7 @@ export abstract class PagedImportServiceBase<Entity, APIEntity extends APIRespon
     let atualizado = false;
     if (paginaOuItem == 'index') {
       this.controle.ultimoIndexProcessado += 1;
-      console.log(
+      logger.info(
         `[updateControle] Atualizando índice para ${this.controle.ultimoIndexProcessado}`,
       );
       atualizado = true;
@@ -168,7 +171,7 @@ export abstract class PagedImportServiceBase<Entity, APIEntity extends APIRespon
       if (this.controle.ultimoIndexProcessado == 99) {
         this.controle.pagina += 1;
         this.controle.ultimoIndexProcessado = -1;
-        console.log(`[updateControle] Atualizando página para ${this.controle.pagina}`);
+        logger.info(`[updateControle] Atualizando página para ${this.controle.pagina}`);
         atualizado = true;
       }
     } else {
@@ -184,7 +187,7 @@ export abstract class PagedImportServiceBase<Entity, APIEntity extends APIRespon
         this.controle.ultimoIndexProcessado = -1;
         lastDate.setDate(lastDate.getDate() + 1);
         this.controle.data = lastDate;
-        console.log(`[updateControle] Atualizando data para ${lastDate}`);
+        logger.info(`[updateControle] Atualizando data para ${lastDate}`);
         atualizado = true;
       }
     }
@@ -192,7 +195,7 @@ export abstract class PagedImportServiceBase<Entity, APIEntity extends APIRespon
     const controleReturn = await lastValueFrom(
       this.controleService.update(this.controle.id, this.controle),
     );
-    console.log(`[updateControle] Controle atualizado: ${JSON.stringify(controleReturn)}`);
+    logger.info(`[updateControle] Controle atualizado: ${JSON.stringify(controleReturn)}`);
     return true;
   }
 }
