@@ -5,8 +5,7 @@ import { DataSource } from 'typeorm';
 
 @Injectable()
 export class VendedorService extends BaseService<Vendedor> {
-
-    constructor(@Inject('DATA_SOURCE') dataSource: DataSource) {
-        super(dataSource.getRepository(Vendedor))
-    }
+  constructor(@Inject('DATA_SOURCE') dataSource: DataSource) {
+    super(dataSource.getRepository(Vendedor));
+  }
 }

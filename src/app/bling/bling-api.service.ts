@@ -22,7 +22,7 @@ export class BlingApiService {
       this.acessToken = updatedAcessoToken;
     }
 
-    if (this.lastRequest && new Date().getTime() - this.lastRequest.getTime() < 300) {
+    if (this.lastRequest && new Date().getTime() - this.lastRequest.getTime() < 350) {
       return new Promise((resolve) => {
         setTimeout(() => {
           this.lastRequest = new Date();

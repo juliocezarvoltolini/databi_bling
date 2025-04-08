@@ -13,10 +13,21 @@ import { PessoaModule } from '../pessoa/pessoa.module';
 import { ResponseLogModule } from '../response-log/response-log.module';
 import { ControleImportacaoModule } from '../controle-importacao/controle-importacao.module';
 import { ProdutoCategoriaBlingService } from './import-service/produto/categoria-produto-bling.service';
-import { ProdutoBlingPagedService, ProdutoBlingService } from './import-service/produto/produto-bling.service';
+import {
+  ProdutoBlingPagedService,
+  ProdutoBlingService,
+} from './import-service/produto/produto-bling.service';
 import { ProdutoModule } from '../produto/produto.module';
 import { FornecedorModule } from '../fornecedor/fornecedor.module';
 import { FornecedorBlingService } from './import-service/fornecedor/fornecedor-bling.service';
+import {
+  VendaBlingPagedService,
+  VendaBlingService,
+} from './import-service/venda/venda-bling.service';
+import { VendedorBlingService } from './import-service/vendedor/vendedor-bling.service';
+import { VendedorModule } from '../vendedor/vendedor.module';
+import { FormaPagamentoModule } from '../forma-pagamento/forma-pagamento.module';
+import { FormaPagamentoBlingService } from './import-service/forma-pagamento/forma-pagamento-bling.service';
 
 @Module({
   imports: [
@@ -27,18 +38,24 @@ import { FornecedorBlingService } from './import-service/fornecedor/fornecedor-b
     ResponseLogModule,
     ControleImportacaoModule,
     ProdutoModule,
-    FornecedorModule
+    FornecedorModule,
+    VendedorModule,
+    FormaPagamentoModule,
   ],
   providers: [
     AuthBlingService,
     BlingApiService,
     PessoaBlingService,
+    FormaPagamentoBlingService,
     PessoaBlingPagedService,
     BlingObservable,
     FornecedorBlingService,
     ProdutoCategoriaBlingService,
     ProdutoBlingService,
-    ProdutoBlingPagedService
+    ProdutoBlingPagedService,
+    VendedorBlingService,
+    VendaBlingService,
+    VendaBlingPagedService,
   ],
   exports: [AuthBlingService],
 })

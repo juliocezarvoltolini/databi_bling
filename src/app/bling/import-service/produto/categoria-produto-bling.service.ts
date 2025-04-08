@@ -10,27 +10,36 @@ import {
 import { BlingApiService } from '../../bling-api.service';
 import { ProdutoCategoriaOpcaoService } from 'src/app/produto/produto-categoria-opcao.service';
 import { ProdutoCategoriaTipo } from 'src/app/produto/entities/produto.types';
+import { logger } from 'src/logger/winston.logger';
 
 @Injectable()
 export class ProdutoCategoriaBlingService extends ImportServiceBase<
   ProdutoCategoriaOpcao,
   CategoriaBling
 > {
-  async getById(Id: number): Promise<ProdutoCategoriaOpcao> {
-    const categoriaCached = await this.getCachedEntity(Id);
+  async getById(Entity?: Partial<CategoriaBling['data']>): Promise<ProdutoCategoriaOpcao> {
+    logger.info(`[ProdutoCategoriaBlingService] Selecionando categoria Id(${Entity.id})`);
+    const categoriaCached = await this.getCachedEntity(Entity.id);
     let categoriaBling: CategoriaBling;
     if (categoriaCached) categoriaBling = categoriaCached.entity;
     else {
       categoriaBling = await (
         await this.blingService.getBling()
       ).categoriasProdutos.find({
-        idCategoriaProduto: Id,
+        idCategoriaProduto: Entity.id,
       });
-
-      this.saveCachedEntity(Id.toFixed(0), categoriaBling);
+      logger.info(
+        `[ProdutoCategoriaBlingService] Salvando categoria no cache ${categoriaBling.data.id}-${categoriaBling.data.descricao}`,
+      );
+      this.saveCachedEntity(Entity.id.toFixed(0), categoriaBling);
     }
-
-    const opcao = await this.getOpcao(categoriaBling.data.descricao, 'CATEGORIA', 'C');
+    let opcao = null;
+    try {
+      opcao = await this.getOpcao(categoriaBling.data.descricao, 'CATEGORIA', 'C');
+    } catch (error) {
+      logger.error(`[ProdutoCategoriaBlingService] Erro ao criar categoria ${error}`);
+      throw error;
+    }
 
     return opcao;
   }

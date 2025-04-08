@@ -1,5 +1,10 @@
 import { IFindResponse as ProdutoBling } from 'bling-erp-api/lib/entities/produtos/interfaces/find.interface';
-import { APICollection, ImportServiceBase, PagedImportServiceBase, PaginacaoType } from '../import.interface';
+import {
+  APICollection,
+  ImportServiceBase,
+  PagedImportServiceBase,
+  PaginacaoType,
+} from '../import.interface';
 import { Produto } from 'src/app/produto/entities/produto.entity';
 import { ResponseLogService } from 'src/app/response-log/response-log.service';
 import { ProdutoService } from 'src/app/produto/produto.service';
@@ -17,23 +22,33 @@ import { Injectable } from '@nestjs/common';
 
 @Injectable()
 export class ProdutoBlingService extends ImportServiceBase<Produto, ProdutoBling> {
-  async getById(Id: number): Promise<Produto> {
-    logger.info(`[ProdutoBlingService] Selecionando produto Id(${Id})`);
-    const produtos = await firstValueFrom(this.produtoService.find({ idOriginal: Id.toFixed(0) }));
-    if (produtos) {
-      logger.info(`[ProdutoBlingService] Encontrou produto no banco de dados.`);
+  async getById(Entity?: Partial<ProdutoBling['data']>): Promise<Produto> {
+    logger.info(`[ProdutoBlingService] Selecionando produto Id(${Entity.id})`);
+    const produtos = await firstValueFrom(
+      this.produtoService.find({ idOriginal: Entity.id.toFixed(0) }),
+    );
+    if (produtos.length > 0) {
+      logger.info(
+        `[ProdutoBlingService] Encontrou produto no banco de dados.${produtos[0].id}-${produtos[0].descricao}`,
+      );
       return produtos[0];
     }
 
     let produtoBling: ProdutoBling;
-    const produtoCached = await this.getCachedEntity(Id);
+    const produtoCached = await this.getCachedEntity(Entity.id);
     if (produtoCached) {
-      logger.info(`[ProdutoBlingService] Encontrou produto no cache`);
+      logger.info(
+        `[ProdutoBlingService] Encontrou produto no cache ${produtoCached.cache.idOriginal}`,
+      );
       produtoBling = produtoCached.entity;
     } else {
-      produtoBling = await (await this.blingService.getBling()).produtos.find({ idProduto: Id });
-      logger.info(`[ProdutoBlingService] Salvando produto no cache`);
-      await this.saveCachedEntity(Id.toFixed(0), produtoBling);
+      produtoBling = await (
+        await this.blingService.getBling()
+      ).produtos.find({ idProduto: Entity.id });
+      logger.info(
+        `[ProdutoBlingService] Salvando produto no cache${produtoBling.data.id}-${produtoBling.data.descricaoCurta}`,
+      );
+      await this.saveCachedEntity(Entity.id.toFixed(0), produtoBling);
     }
 
     return this.createProduto(null, produtoBling);
@@ -41,14 +56,17 @@ export class ProdutoBlingService extends ImportServiceBase<Produto, ProdutoBling
 
   private async createProduto(produto: Produto, produtoBling: ProdutoBling): Promise<Produto> {
     const update = produto ? true : false;
-    logger.info(`[ProdutoBlingService] ${update ? 'Atualizando' : 'Criando'} Produto`)
-    const fornecedorP = this.fornecedorService.getById(produtoBling.data.fornecedor.id);
+    logger.info(`[ProdutoBlingService] ${update ? 'Atualizando' : 'Criando'} Produto`);
+    const fornecedorP = this.fornecedorService.getById(produtoBling.data.fornecedor);
     const marcaP = this.produtoCategoriaOpcaoService.getMarcaAsOpcao(produtoBling.data.marca);
-    const categoriaP = this.produtoCategoriaOpcaoService.getById(produtoBling.data.categoria.id);
+    const categoriaP = this.produtoCategoriaOpcaoService.getById(produtoBling.data.categoria);
     const variacoesP = this.produtoCategoriaOpcaoService.getVariacoesAsOpcoes(
       produtoBling.data.variacao?.nome,
     );
-    const produtoPaiP = this.getById(produtoBling.data?.variacao?.produtoPai?.id);
+    const produtoPaiBling: Partial<ProdutoBling['data']> = {
+      id: produtoBling.data.variacao?.produtoPai.id,
+    };
+    const produtoPaiP = this.getById(produtoPaiBling);
 
     const [fornecedor, marca, categoria, variacoes, produtoPai] = await Promise.all([
       fornecedorP,
@@ -87,10 +105,14 @@ export class ProdutoBlingService extends ImportServiceBase<Produto, ProdutoBling
         this.criarRelacao(produto, variacoes),
       );
     }
-    if (!update) return firstValueFrom(this.produtoService.create(produto));
-    else {
-      await this.produtoService.repository.update(produto.id, produto);
-      return produto;
+    try {
+      return this.produtoService.repository.save(produto);
+    } catch (error) {
+      logger.error(
+        `[ProdutoBlingService] Erro ao ${update ? 'atualizar' : 'criar'} produto`,
+        error,
+      );
+      throw error;
     }
   }
 
@@ -124,10 +146,11 @@ export class ProdutoBlingService extends ImportServiceBase<Produto, ProdutoBling
 
 @Injectable()
 export class ProdutoBlingPagedService extends PagedImportServiceBase<Produto, ProdutoBling> {
-
-  constructor(controleImportacaoService: ControleImportacaoService,
+  constructor(
+    controleImportacaoService: ControleImportacaoService,
     private readonly blingService: BlingApiService,
-    private produtoBlingService: ProdutoBlingService) {
+    private produtoBlingService: ProdutoBlingService,
+  ) {
     super('produto', controleImportacaoService, PaginacaoType.INDEX, produtoBlingService);
   }
   async searchPage(searchParameters?: Record<string, any>): Promise<APICollection<ProdutoBling>> {
@@ -136,7 +159,6 @@ export class ProdutoBlingPagedService extends PagedImportServiceBase<Produto, Pr
     return pagina;
   }
   readAndSave(blingEntity: Partial<ProdutoBling['data']>): Promise<Produto> {
-    return this.produtoBlingService.getById(blingEntity.id);
+    return this.produtoBlingService.getById(blingEntity);
   }
-
 }

@@ -6,29 +6,31 @@ import { FormaPagamentoService } from 'src/app/forma-pagamento/forma-pagamento.s
 import { firstValueFrom } from 'rxjs';
 import { logger } from 'src/logger/winston.logger';
 import { BlingApiService } from '../../bling-api.service';
+import { Injectable } from '@nestjs/common';
 
+@Injectable()
 export class FormaPagamentoBlingService extends ImportServiceBase<
   FormaPagamento,
   FormaPagamentoBling
 > {
-  async getById(Id: number): Promise<FormaPagamento> {
-    logger.info(`[FormaPagamentoBlingService] Selecionando ID(${Id})`);
+  async getById(Entity?: Partial<FormaPagamentoBling['data']>): Promise<FormaPagamento> {
+    logger.info(`[FormaPagamentoBlingService] Selecionando ID(${Entity.id})`);
     const formasPagamento = await firstValueFrom(
-      this.formaPagamentoService.find({ idOriginal: Id.toFixed(0) }),
+      this.formaPagamentoService.find({ idOriginal: Entity.id.toFixed(0) }),
     );
 
     if (formasPagamento) {
       return formasPagamento[0];
     }
 
-    const formaPagamentoCached = await this.getCachedEntity(Id);
+    const formaPagamentoCached = await this.getCachedEntity(Entity.id);
     let formaPagamentoBling: FormaPagamentoBling;
     if (formaPagamentoCached) {
       formaPagamentoBling = formaPagamentoCached.entity;
     } else {
       const bling = await this.blingService.getBling();
-      formaPagamentoBling = await bling.formasDePagamento.find({ idFormaPagamento: Id });
-      this.saveCachedEntity(Id.toFixed(0), formaPagamentoBling);
+      formaPagamentoBling = await bling.formasDePagamento.find({ idFormaPagamento: Entity.id });
+      this.saveCachedEntity(Entity.id.toFixed(0), formaPagamentoBling);
     }
 
     const formaPagamento = new FormaPagamento();

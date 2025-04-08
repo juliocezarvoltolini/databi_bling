@@ -20,17 +20,18 @@ export enum PaginacaoType {
 }
 
 export interface ImportService<Entity, APIEntity extends APIResponse<APIEntity>> {
-  getById(Id: number): Promise<Entity>;
+  getById(Entity: Partial<APIEntity['data']>): Promise<Entity>;
   getCachedEntity(id: number): Promise<{ cache: ResponseLog; entity: APIEntity }>;
   saveCachedEntity(id: string, blingEntity: APIEntity, response?: ResponseLog): Promise<void>;
 }
 
 export abstract class ImportServiceBase<Entity, APIEntity extends APIResponse<APIEntity>>
-  implements ImportService<Entity, APIEntity> {
+  implements ImportService<Entity, APIEntity>
+{
   constructor(
     protected readonly responseLogService: ResponseLogService,
     protected readonly entity: string,
-  ) { }
+  ) {}
   async saveCachedEntity(
     id: string,
     blingEntity: APIEntity,
@@ -63,7 +64,7 @@ export abstract class ImportServiceBase<Entity, APIEntity extends APIResponse<AP
     return { cache: first, entity: JSON.parse(first.response) };
   }
 
-  abstract getById(Id: number): Promise<Entity>;
+  abstract getById(Entity?: Partial<APIEntity['data']>): Promise<Entity>;
 }
 
 export interface PagedImportService<Entity, APIEntity extends APIResponse<APIEntity>> {
@@ -73,8 +74,10 @@ export interface PagedImportService<Entity, APIEntity extends APIResponse<APIEnt
 }
 
 export abstract class PagedImportServiceBase<Entity, APIEntity extends APIResponse<APIEntity>>
-  implements PagedImportService<Entity, APIEntity> {
+  implements PagedImportService<Entity, APIEntity>
+{
   protected controle: ControleImportacao;
+  private searchParametersCopy: Record<string, any>;
 
   abstract searchPage(searchParameters?: Record<string, any>): Promise<APICollection<APIEntity>>;
   abstract readAndSave(blingEntity: any): Promise<Entity>;
@@ -84,7 +87,7 @@ export abstract class PagedImportServiceBase<Entity, APIEntity extends APIRespon
     private readonly controleService: ControleImportacaoService,
     private paginacaoType: PaginacaoType,
     protected readonly importService: ImportService<Entity, APIEntity>,
-  ) { }
+  ) {}
 
   async start(): Promise<void> {
     logger.info(`[PagedImportService] Iniciando importação da entidade ${this.entity}`);
@@ -98,7 +101,13 @@ export abstract class PagedImportServiceBase<Entity, APIEntity extends APIRespon
     searchParameters = updateDateOfSearchParameters(searchParameters, this.controle.data);
 
     logger.info(`[PagedImportService] Buscando na API`);
-    const lista = await this.searchPage(searchParameters);
+    let lista = null;
+    try {
+      lista = await this.searchPage(searchParameters);
+    } catch (error) {
+      logger.error(`[PagedImportService] [${this.entity}] Erro ao buscar na API: ${error}`);
+      throw error;
+    }
 
     //Irá pegar os itens que ainda não foram processados
     const itensRestantes = getItensRestantes(lista, this.controle.ultimoIndexProcessado);
@@ -133,6 +142,7 @@ export abstract class PagedImportServiceBase<Entity, APIEntity extends APIRespon
 
   private async getControle(): Promise<ControleImportacao> {
     this.controle = new ControleImportacao();
+    this.searchParametersCopy = this.controle.parametros ?? {};
     this.controle.tabela = this.entity;
     const controles = await lastValueFrom(this.controleService.find(this.controle));
     this.controle = controles[0] ?? null;
@@ -192,9 +202,13 @@ export abstract class PagedImportServiceBase<Entity, APIEntity extends APIRespon
       }
     }
     if (!atualizado) return false;
-    const controleReturn = await lastValueFrom(
-      this.controleService.update(this.controle.id, this.controle),
-    );
+    logger.info(`[updateControle] Atualizando.`);
+    const controleReturn = await this.controleService.repository.update(this.controle.id, {
+      pagina: this.controle.pagina,
+      data: this.controle.data,
+      ultimoIndexProcessado: this.controle.ultimoIndexProcessado,
+    });
+
     logger.info(`[updateControle] Controle atualizado: ${JSON.stringify(controleReturn)}`);
     return true;
   }

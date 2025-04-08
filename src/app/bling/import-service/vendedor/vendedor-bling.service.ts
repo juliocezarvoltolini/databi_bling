@@ -21,15 +21,15 @@ export class VendedorBlingService extends ImportServiceBase<Vendedor, VendedorBl
   ) {
     super(responseLogService, 'vendedor');
   }
-  async getById(Id: number): Promise<Vendedor> {
+  async getById(Entity?: Partial<VendedorBling['data']>): Promise<Vendedor> {
     const vendedores = await firstValueFrom(
-      this.vendedorService.find({ idOriginal: Id.toFixed(0) }),
+      this.vendedorService.find({ idOriginal: Entity.id.toFixed(0) }),
     );
     if (vendedores.length) {
       return vendedores[0];
     }
 
-    const vendedorCahed = await this.getCachedEntity(Id);
+    const vendedorCahed = await this.getCachedEntity(Entity.id);
     let vendedorBling: VendedorBling;
     let pessoa: Pessoa;
     if (vendedorCahed) {
@@ -41,8 +41,9 @@ export class VendedorBlingService extends ImportServiceBase<Vendedor, VendedorBl
       const bling = await this.blingService.getBling();
 
       const [apiResponse, pessoaResponse] = await Promise.all([
-        bling.vendedores.find({ idVendedor: Id }),
-        this.pessoaBlingService.getById(vendedorBling.data.contato.id),
+        bling.vendedores.find({ idVendedor: Entity.id }),
+
+        this.pessoaBlingService.getById({ id: vendedorCahed.entity.data.contato.id }),
       ]);
       pessoa = pessoaResponse;
       vendedorBling = apiResponse;

@@ -19,8 +19,8 @@ import { BlingApiService } from 'src/app/bling/bling-api.service';
 
 @Injectable()
 export class PessoaBlingService extends ImportServiceBase<Pessoa, PessoaBling> {
-  async getById(Id: number): Promise<Pessoa> {
-    const pessoas = this.servicePessoa.find({ idOriginal: Id.toFixed(0) });
+  async getById(Entity?: Partial<PessoaBling['data']>): Promise<Pessoa> {
+    const pessoas = this.servicePessoa.find({ idOriginal: Entity.id.toFixed(0) });
     if (pessoas) {
       logger.info('[ClienteBlingService] Encontrou a pessoa');
       return pessoas[0];
@@ -28,15 +28,15 @@ export class PessoaBlingService extends ImportServiceBase<Pessoa, PessoaBling> {
 
     const bling = await this.serviceBling.getBling();
     let pessoaBling: PessoaBling;
-    const pessoaCached = await this.getCachedEntity(Id);
+    const pessoaCached = await this.getCachedEntity(Entity.id);
     if (pessoaCached) {
       logger.info(
         `[ClienteBlingService] Usando pessoa (${pessoaCached.entity.data.id}) ${pessoaCached.entity.data.nome} do cache`,
       );
       pessoaBling = pessoaCached.entity;
     } else {
-      pessoaBling = await bling.contatos.find({ idContato: Id });
-      this.saveCachedEntity(Id.toFixed(0), pessoaBling);
+      pessoaBling = await bling.contatos.find({ idContato: Entity.id });
+      this.saveCachedEntity(Entity.id.toFixed(0), pessoaBling);
     }
 
     logger.info(
@@ -120,6 +120,6 @@ export class PessoaBlingPagedService extends PagedImportServiceBase<Pessoa, Pess
   }
 
   readAndSave(blingEntity: Partial<PessoaBling['data']>): Promise<Pessoa> {
-    return this.clienteBlingService.getById(blingEntity.id);
+    return this.clienteBlingService.getById(blingEntity);
   }
 }

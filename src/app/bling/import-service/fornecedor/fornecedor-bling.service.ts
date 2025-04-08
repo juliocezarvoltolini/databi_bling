@@ -10,16 +10,16 @@ import { Injectable } from '@nestjs/common';
 
 @Injectable()
 export class FornecedorBlingService extends ImportServiceBase<Fornecedor, FornecedorBling> {
-  async getById(Id: number): Promise<Fornecedor> {
+  async getById(Entity?: Partial<FornecedorBling['data']>): Promise<Fornecedor> {
     const fornecedores = firstValueFrom(
-      this.forncedorService.find({ pessoa: { idOriginal: Id.toFixed(0) } }),
+      this.forncedorService.find({ pessoa: { idOriginal: Entity.id.toFixed(0) } }),
     );
 
     if (fornecedores) {
       logger.info(`[FornecedorBlingService] Encontrou o fornecedor`);
       return fornecedores[0];
     }
-    const pessoa = await this.servicePessoaBling.getById(Id);
+    const pessoa = await this.servicePessoaBling.getById(Entity);
 
     const fornecedor: Fornecedor = new Fornecedor();
     fornecedor.pessoa = pessoa;

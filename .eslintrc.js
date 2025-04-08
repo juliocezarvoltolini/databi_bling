@@ -20,5 +20,6 @@ module.exports = {
     '@typescript-eslint/no-explicit-any': 'off',
     'prettier/prettier': ['error', { endOfLine: 'auto' }],
     'no-multiple-empty-lines': ['error', { max: 3, maxEOF: 1, maxBOF: 1 }],
+    '@typescript-eslint/no-unused-vars': 'error',
   },
 };
