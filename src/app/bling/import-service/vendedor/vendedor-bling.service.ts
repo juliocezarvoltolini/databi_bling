@@ -22,6 +22,7 @@ export class VendedorBlingService extends ImportServiceBase<Vendedor, VendedorBl
     super(responseLogService, 'vendedor');
   }
   async getById(Entity?: Partial<VendedorBling['data']>): Promise<Vendedor> {
+    if (Entity.id == 0) return null;
     const vendedores = await firstValueFrom(
       this.vendedorService.find({ idOriginal: Entity.id.toFixed(0) }),
     );
@@ -39,16 +40,13 @@ export class VendedorBlingService extends ImportServiceBase<Vendedor, VendedorBl
       vendedorBling = vendedorCahed.entity;
     } else {
       const bling = await this.blingService.getBling();
+      const apiResponse = await bling.vendedores.find({ idVendedor: Entity.id });
+      const pessoaResponse = await this.pessoaBlingService.getById({ id: vendedorCahed.entity.data.contato.id }),
 
-      const [apiResponse, pessoaResponse] = await Promise.all([
-        bling.vendedores.find({ idVendedor: Entity.id }),
-
-        this.pessoaBlingService.getById({ id: vendedorCahed.entity.data.contato.id }),
-      ]);
-      pessoa = pessoaResponse;
+        pessoa = pessoaResponse;
       vendedorBling = apiResponse;
 
-      this.saveCachedEntity(vendedorBling.data.id.toFixed(0), vendedorBling);
+      this.saveCachedEntity(apiResponse.data.id.toFixed(0), apiResponse);
     }
 
     const vendedor = new Vendedor();

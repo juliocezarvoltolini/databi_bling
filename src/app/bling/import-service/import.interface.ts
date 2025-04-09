@@ -26,12 +26,11 @@ export interface ImportService<Entity, APIEntity extends APIResponse<APIEntity>>
 }
 
 export abstract class ImportServiceBase<Entity, APIEntity extends APIResponse<APIEntity>>
-  implements ImportService<Entity, APIEntity>
-{
+  implements ImportService<Entity, APIEntity> {
   constructor(
     protected readonly responseLogService: ResponseLogService,
     protected readonly entity: string,
-  ) {}
+  ) { }
   async saveCachedEntity(
     id: string,
     blingEntity: APIEntity,
@@ -74,8 +73,7 @@ export interface PagedImportService<Entity, APIEntity extends APIResponse<APIEnt
 }
 
 export abstract class PagedImportServiceBase<Entity, APIEntity extends APIResponse<APIEntity>>
-  implements PagedImportService<Entity, APIEntity>
-{
+  implements PagedImportService<Entity, APIEntity> {
   protected controle: ControleImportacao;
   private searchParametersCopy: Record<string, any>;
 
@@ -87,7 +85,7 @@ export abstract class PagedImportServiceBase<Entity, APIEntity extends APIRespon
     private readonly controleService: ControleImportacaoService,
     private paginacaoType: PaginacaoType,
     protected readonly importService: ImportService<Entity, APIEntity>,
-  ) {}
+  ) { }
 
   async start(): Promise<void> {
     logger.info(`[PagedImportService] Iniciando importação da entidade ${this.entity}`);
@@ -114,8 +112,19 @@ export abstract class PagedImportServiceBase<Entity, APIEntity extends APIRespon
 
     for (const item of itensRestantes) {
       logger.info(`[PagedImportService] Processando item`);
-      await this.readAndSave(item);
-      await this.updateIndexOfControle();
+      try {
+        await this.readAndSave(item);
+      } catch (error) {
+        logger.error(`[PagedImportService] Erro ao processar [${this.entity}]`, error);
+        throw error;
+      }
+      try {
+        await this.updateIndexOfControle();
+      } catch (error) {
+        logger.error(`[PagedImportService] Erro ao atualizar controle.`, error);
+        throw error;
+      }
+
     }
 
     let temProximaPagina = false;
@@ -155,6 +164,10 @@ export abstract class PagedImportServiceBase<Entity, APIEntity extends APIRespon
       this.controle = await lastValueFrom(this.controleService.create(this.controle));
       return this.controle;
     }
+
+    this.controle.ultimoIndexProcessado = -1;
+
+    return this.controle;
   }
 
   protected async updateIndexOfControle(): Promise<boolean> {
@@ -208,8 +221,6 @@ export abstract class PagedImportServiceBase<Entity, APIEntity extends APIRespon
       data: this.controle.data,
       ultimoIndexProcessado: this.controle.ultimoIndexProcessado,
     });
-
-    logger.info(`[updateControle] Controle atualizado: ${JSON.stringify(controleReturn)}`);
     return true;
   }
 }

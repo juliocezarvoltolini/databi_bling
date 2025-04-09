@@ -10,7 +10,7 @@ export class ProdutoCategoria {
   nome: string;
   @Column({ name: 'tipo', type: 'char', length: 1, default: 'C', nullable: false })
   tipo: ProdutoCategoriaTipo;
-  @OneToMany(() => ProdutoCategoriaOpcao, (opcao) => opcao.produtoCategoria, { cascade: true })
+  @OneToMany(() => ProdutoCategoriaOpcao, (opcao) => opcao.produtoCategoria)
   opcoes: ProdutoCategoriaOpcao[];
 }
 
@@ -18,7 +18,7 @@ export class ProdutoCategoria {
 export class ProdutoCategoriaOpcao {
   @PrimaryGeneratedColumn({ type: 'int4' })
   id: number;
-  @ManyToOne(() => ProdutoCategoria, { eager: true })
+  @ManyToOne(() => ProdutoCategoria, { eager: true, cascade: true})
   @JoinColumn({ name: 'id_produto_categoria' })
   produtoCategoria: ProdutoCategoria;
   @Column({ name: 'nome', type: 'varchar', length: 100 })

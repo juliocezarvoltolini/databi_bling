@@ -42,11 +42,17 @@ export class ProdutoBlingService extends ImportServiceBase<Produto, ProdutoBling
       );
       produtoBling = produtoCached.entity;
     } else {
-      produtoBling = await (
-        await this.blingService.getBling()
-      ).produtos.find({ idProduto: Entity.id });
+      const blingService = await this.blingService.getBling();
+      try {
+        produtoBling = await blingService.produtos.find({ idProduto: Entity.id }); //Está acontecendo o erro nesta linha
+      } catch (error) {
+        logger.error(`[ProdutoBlingService] Não foi possível consultar o produto ${Entity.id} na API do Bling`, error);
+        throw error;
+      }
+
+
       logger.info(
-        `[ProdutoBlingService] Salvando produto no cache${produtoBling.data.id}-${produtoBling.data.descricaoCurta}`,
+        `[ProdutoBlingService] Salvando produto no cache${produtoBling.data.id}-${produtoBling.data.nome}`,
       );
       await this.saveCachedEntity(Entity.id.toFixed(0), produtoBling);
     }
@@ -58,23 +64,31 @@ export class ProdutoBlingService extends ImportServiceBase<Produto, ProdutoBling
     const update = produto ? true : false;
     logger.info(`[ProdutoBlingService] ${update ? 'Atualizando' : 'Criando'} Produto`);
     const fornecedorP = this.fornecedorService.getById(produtoBling.data.fornecedor);
-    const marcaP = this.produtoCategoriaOpcaoService.getMarcaAsOpcao(produtoBling.data.marca);
-    const categoriaP = this.produtoCategoriaOpcaoService.getById(produtoBling.data.categoria);
-    const variacoesP = this.produtoCategoriaOpcaoService.getVariacoesAsOpcoes(
-      produtoBling.data.variacao?.nome,
-    );
-    const produtoPaiBling: Partial<ProdutoBling['data']> = {
-      id: produtoBling.data.variacao?.produtoPai.id,
-    };
-    const produtoPaiP = this.getById(produtoPaiBling);
 
-    const [fornecedor, marca, categoria, variacoes, produtoPai] = await Promise.all([
+    const marcaP = produtoBling.data.marca.length > 0 ? this.produtoCategoriaOpcaoService.getMarcaAsOpcao(produtoBling.data.marca) : Promise.resolve(null);
+    const categoriaP = produtoBling.data.categoria ? this.produtoCategoriaOpcaoService.getById(produtoBling.data.categoria) : Promise.resolve(null);
+    const variacoesP = produtoBling.data.variacao ? this.produtoCategoriaOpcaoService.getVariacoesAsOpcoes(
+      produtoBling.data.variacao?.nome,
+    ) : Promise.resolve(null);
+
+    let produtoPaiBling: Partial<ProdutoBling['data']> = null;
+    let produtoPai: Produto = null;
+
+    if (produtoBling.data.variacao) {
+      produtoPaiBling = {
+        id: produtoBling.data.variacao?.produtoPai.id,
+      };
+
+      produtoPai = await this.getById(produtoPaiBling);
+    }
+
+    const [fornecedor, marca, categoria, variacoes] = await Promise.all([
       fornecedorP,
       marcaP,
       categoriaP,
       variacoesP,
-      produtoPaiP,
     ]);
+
     if (!produto) produto = new Produto();
     produto.identificador = produtoBling.data.codigo;
     produto.idOriginal = produtoBling.data.id.toFixed(0);
@@ -106,6 +120,7 @@ export class ProdutoBlingService extends ImportServiceBase<Produto, ProdutoBling
       );
     }
     try {
+     
       return this.produtoService.repository.save(produto);
     } catch (error) {
       logger.error(

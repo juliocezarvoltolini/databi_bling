@@ -24,6 +24,7 @@
     "@nestjs/common": "^11.0.13",
     "@nestjs/config": "^4.0.2",
     "@nestjs/core": "^11.0.13",
+    "@nestjs/devtools-integration": "^0.2.0",
     "@nestjs/mapped-types": "*",
     "@nestjs/platform-express": "^11.0.13",
     "@nestjs/schedule": "^5.0.1",
@@ -78,5 +79,13 @@
     ],
     "coverageDirectory": "../coverage",
     "testEnvironment": "node"
+  },
+  "bin": "dist/main.js",
+  "pkg": {
+    "scripts": "dist/**/*.js",
+    "assets": [
+      "dist/**/*.json",
+      ".env"
+    ]
   }
 }

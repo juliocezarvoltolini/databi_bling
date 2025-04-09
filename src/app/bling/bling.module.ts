@@ -28,6 +28,7 @@ import { VendedorBlingService } from './import-service/vendedor/vendedor-bling.s
 import { VendedorModule } from '../vendedor/vendedor.module';
 import { FormaPagamentoModule } from '../forma-pagamento/forma-pagamento.module';
 import { FormaPagamentoBlingService } from './import-service/forma-pagamento/forma-pagamento-bling.service';
+import { NfeBlingPagedService, NFEBlingService } from './import-service/nfe/nfe-bling.service';
 
 @Module({
   imports: [
@@ -56,7 +57,9 @@ import { FormaPagamentoBlingService } from './import-service/forma-pagamento/for
     VendedorBlingService,
     VendaBlingService,
     VendaBlingPagedService,
+    NFEBlingService,
+    NfeBlingPagedService,
   ],
   exports: [AuthBlingService],
 })
-export class BlingModule {}
+export class BlingModule { }

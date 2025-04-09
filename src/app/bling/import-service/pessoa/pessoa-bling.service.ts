@@ -11,7 +11,7 @@ import { PessoaService } from 'src/app/pessoa/pessoa.service';
 import { logger } from 'src/logger/winston.logger';
 import { PessoaEndereco } from 'src/app/pessoa/entities/pessoa-endereco.entity';
 import { IUF } from 'src/shared/types/uf.types';
-import { lastValueFrom } from 'rxjs';
+import { firstValueFrom, lastValueFrom } from 'rxjs';
 import { ControleImportacaoService } from 'src/app/controle-importacao/controle-importacao.service';
 import { Injectable } from '@nestjs/common';
 import { dateBlingToDate } from 'src/app/bling/utils/bling-utils';
@@ -20,8 +20,8 @@ import { BlingApiService } from 'src/app/bling/bling-api.service';
 @Injectable()
 export class PessoaBlingService extends ImportServiceBase<Pessoa, PessoaBling> {
   async getById(Entity?: Partial<PessoaBling['data']>): Promise<Pessoa> {
-    const pessoas = this.servicePessoa.find({ idOriginal: Entity.id.toFixed(0) });
-    if (pessoas) {
+    const pessoas = await firstValueFrom(this.servicePessoa.find({ idOriginal: Entity.id.toFixed(0) }));
+    if (pessoas.length > 0) {
       logger.info('[ClienteBlingService] Encontrou a pessoa');
       return pessoas[0];
     }

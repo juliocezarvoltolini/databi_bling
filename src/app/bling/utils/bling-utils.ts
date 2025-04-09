@@ -14,6 +14,24 @@ export function toDateBling(date: Date | string): string {
   return dateString;
 }
 
+
+
+export function toDateTimeBling(date: Date | string, inicioOuFim: 'INICIO' | 'FIM'): string {
+  let dateInstance: Date;
+  if (date instanceof Date) {
+    dateInstance = date;
+  } else {
+    dateInstance = new Date(`${date}T00:00:01`);
+  }
+
+  const year = dateInstance.getUTCFullYear();
+  const month = String(dateInstance.getUTCMonth() + 1).padStart(2, '0'); // UTCMonth é 0-indexado
+  const day = String(dateInstance.getUTCDate()).padStart(2, '0'); // getDate() para dia do mês
+
+  const dateString = `${year}-${month}-${day} ${inicioOuFim == 'INICIO' ? '00:00:01' : '23:59:59'}`;
+  return dateString;
+}
+
 export function updateDateOfSearchParameters(
   parametros: Record<string, any>,
   data: Date,
@@ -21,7 +39,9 @@ export function updateDateOfSearchParameters(
   for (const [key, value] of Object.entries(parametros)) {
     if (value == 'date') {
       parametros[key] = toDateBling(data); // Substitui 'date' pela data
-    }
+    } else if (value == 'timestamp_inicio') {
+      parametros[key] = toDateTimeBling(data, 'INICIO')
+    } else if (value == 'timestamp_fim') parametros[key] = toDateTimeBling(data, 'FIM')
   }
   return parametros;
 }
