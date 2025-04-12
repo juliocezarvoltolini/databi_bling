@@ -60,7 +60,7 @@ export class NFEBlingService extends ImportServiceBase<Nfe, NotaBling> {
 
 
         let nfe = await this.createNFE(null, nfeBling);
-        logger.info(`[NFEBlingService] Salvando NFE (${nfes[0].id}) - ${nfes[0].pessoa.nome} - ${nfes[0].nfeCategoria.descricao}`)
+        logger.info(`[NFEBlingService] Salvando NFE (${nfeBling.data.id}) - ${nfe.pessoa.nome} - ${nfe.nfeCategoria.descricao}`)
         return this.nfeRepository.save(nfe);
 
     }
