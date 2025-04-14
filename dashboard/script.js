@@ -3,7 +3,7 @@ const API_URL = 'http://127.0.0.1:3000/controle-importacao';
 // Formata a data no padrão dd/mm/yyyy
 function formatarData(dataStr) {
   if (!dataStr) return 'N/A';
-  const data = new Date(dataStr);
+  const data = new Date(dataStr+ 'T04:00:00');
   return data.toLocaleDateString('pt-BR');
 }
 
@@ -24,7 +24,7 @@ async function carregarDashboard() {
       card.innerHTML = `
         <h2>📁 ${item.tabela}</h2>
         <p><strong>Página:</strong> ${item.pagina}</p>
-        <p><strong>Último Index:</strong> ${item.ultimoIndexProcessado < 0 ? 0 : item.ultimoIndexProcessado}</p>
+        <p><strong>Quantidade de Registros:</strong> ${item.ultimoIndexProcessado  + 1}</p>
         <p class="data"><strong>Data:</strong> ${formatarData(item.data)}</p>
       `;
 
