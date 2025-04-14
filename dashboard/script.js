@@ -8,11 +8,13 @@ function formatarData(dataStr) {
 }
 
 async function carregarDashboard() {
+  const container = document.getElementById('dashboard');
+  container.innerHTML = '<p>🔄 Carregando...</p>';
+
   try {
     const response = await fetch(API_URL);
     const dados = await response.json();
 
-    const container = document.getElementById('dashboard');
     container.innerHTML = '';
 
     dados.forEach((item) => {
@@ -22,15 +24,20 @@ async function carregarDashboard() {
       card.innerHTML = `
         <h2>📁 ${item.tabela}</h2>
         <p><strong>Página:</strong> ${item.pagina}</p>
-        <p><strong>Último Registro Processado:</strong> ${item.ultimoIndexProcessado < 0 ? 0 : item.ultimoIndexProcessado}</p>
+        <p><strong>Último Index:</strong> ${item.ultimoIndexProcessado < 0 ? 0 : item.ultimoIndexProcessado}</p>
         <p class="data"><strong>Data:</strong> ${formatarData(item.data)}</p>
       `;
 
       container.appendChild(card);
     });
   } catch (erro) {
+    container.innerHTML = `<p>❌ Erro ao carregar dados: ${erro.message}</p>`;
     console.error('Erro ao carregar dados do dashboard:', erro);
   }
 }
 
-carregarDashboard();
+// Evento no botão de atualização
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('btnAtualizar').addEventListener('click', carregarDashboard);
+  carregarDashboard();
+});
