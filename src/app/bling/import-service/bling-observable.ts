@@ -28,8 +28,8 @@ export class BlingObservable implements OnModuleInit {
 
   async onModuleInit() {
     logger.info('🟢 BlingObservable iniciado');
-    await this.executeImport();
-    this.scheduleNextRun();
+    this.executeImport().then(() => this.scheduleNextRun());
+ 
   }
 
   private scheduleNextRun() {
