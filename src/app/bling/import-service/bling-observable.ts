@@ -19,7 +19,7 @@ export class BlingObservable implements OnModuleInit {
     private readonly produtoBlingService: ProdutoBlingPagedService,
     private readonly vendaBlingService: VendaBlingPagedService,
     private readonly nfeBlingService: NfeBlingPagedService,
-    private readonly configService: ConfigService
+    private readonly configService: ConfigService,
   ) {
     this.subscriptions.push(vendaBlingService);
     this.subscriptions.push(nfeBlingService);
@@ -29,13 +29,14 @@ export class BlingObservable implements OnModuleInit {
   async onModuleInit() {
     logger.info('🟢 BlingObservable iniciado');
     this.executeImport().then(() => this.scheduleNextRun());
- 
   }
 
   private scheduleNextRun() {
     setTimeout(async () => {
       if (this.isRunning) {
-        logger.warn(`⚠️ [BlingObservable] Execução ignorada, pois ainda há uma em andamento: ${this.now()}`);
+        logger.warn(
+          `⚠️ [BlingObservable] Execução ignorada, pois ainda há uma em andamento: ${this.now()}`,
+        );
         return this.scheduleNextRun(); // Reagenda mesmo que não execute
       }
 
@@ -75,7 +76,9 @@ export class BlingObservable implements OnModuleInit {
       logger.error(`❌ [BlingObservable] Erro ao iniciar ${nome}`, error);
 
       const retryTime = new Date(Date.now() + this.RETRY_DELAY);
-      logger.warn(`⏳ [BlingObservable] Tentando novamente ${nome} em 2 minutos (${this.format(retryTime)})`);
+      logger.warn(
+        `⏳ [BlingObservable] Tentando novamente ${nome} em 2 minutos (${this.format(retryTime)})`,
+      );
 
       setTimeout(async () => {
         logger.info(`🔁 [BlingObservable] Retry iniciado: ${nome} - ${this.now()}`);
