@@ -46,10 +46,12 @@ export class ProdutoBlingService extends ImportServiceBase<Produto, ProdutoBling
       try {
         produtoBling = await blingService.produtos.find({ idProduto: Entity.id }); //Está acontecendo o erro nesta linha
       } catch (error) {
-        logger.error(`[ProdutoBlingService] Não foi possível consultar o produto ${Entity.id} na API do Bling`, error);
+        logger.error(
+          `[ProdutoBlingService] Não foi possível consultar o produto ${Entity.id} na API do Bling`,
+          error,
+        );
         throw error;
       }
-
 
       logger.info(
         `[ProdutoBlingService] Salvando produto no cache${produtoBling.data.id}-${produtoBling.data.nome}`,
@@ -65,11 +67,16 @@ export class ProdutoBlingService extends ImportServiceBase<Produto, ProdutoBling
     logger.info(`[ProdutoBlingService] ${update ? 'Atualizando' : 'Criando'} Produto`);
     const fornecedorP = this.fornecedorService.getById(produtoBling.data.fornecedor);
 
-    const marcaP = produtoBling.data.marca.length > 0 ? this.produtoCategoriaOpcaoService.getMarcaAsOpcao(produtoBling.data.marca) : Promise.resolve(null);
-    const categoriaP = produtoBling.data.categoria ? this.produtoCategoriaOpcaoService.getById(produtoBling.data.categoria) : Promise.resolve(null);
-    const variacoesP = produtoBling.data.variacao ? this.produtoCategoriaOpcaoService.getVariacoesAsOpcoes(
-      produtoBling.data.variacao?.nome,
-    ) : Promise.resolve(null);
+    const marcaP =
+      produtoBling.data.marca.length > 0
+        ? this.produtoCategoriaOpcaoService.getMarcaAsOpcao(produtoBling.data.marca)
+        : Promise.resolve(null);
+    const categoriaP = produtoBling.data.categoria
+      ? this.produtoCategoriaOpcaoService.getById(produtoBling.data.categoria)
+      : Promise.resolve(null);
+    const variacoesP = produtoBling.data.variacao
+      ? this.produtoCategoriaOpcaoService.getVariacoesAsOpcoes(produtoBling.data.variacao?.nome)
+      : Promise.resolve(null);
 
     let produtoPaiBling: Partial<ProdutoBling['data']> = null;
     let produtoPai: Produto = null;
@@ -120,7 +127,6 @@ export class ProdutoBlingService extends ImportServiceBase<Produto, ProdutoBling
       );
     }
     try {
-     
       return this.produtoService.repository.save(produto);
     } catch (error) {
       logger.error(

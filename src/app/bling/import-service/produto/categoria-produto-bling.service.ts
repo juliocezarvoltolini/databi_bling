@@ -69,7 +69,7 @@ export class ProdutoCategoriaBlingService extends ImportServiceBase<
       const opcoesP: Promise<ProdutoCategoriaOpcao>[] = [];
 
       for (let i = 0; i < nomes.length; i++) {
-        opcoesP.push(this.getOpcao(nomes[i], valores[i], 'V'));
+        opcoesP.push(this.getOpcao(valores[i], nomes[i], 'V'));
       }
 
       const opcoes: ProdutoCategoriaOpcao[] = await Promise.all(opcoesP);

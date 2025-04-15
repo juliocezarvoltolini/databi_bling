@@ -205,7 +205,9 @@ export abstract class PagedImportServiceBase<Entity, APIEntity extends APIRespon
       const lastDate = new Date(this.controle.data + 'T00:00:00');
       lastDate.setHours(0, 0, 0, 0); // Ajusta para meia-noite
 
-      if (this.controle.ultimoIndexProcessado <= 99 && lastDate < today) {
+      if (this.controle.ultimoIndexProcessado == 99) {
+        return this.updateControle('pagina');
+      } else if (this.controle.ultimoIndexProcessado < 99 && lastDate < today) {
         // Se a data de controle for anterior a hoje, atualize para o próximo dia
         this.controle.pagina = 1;
         this.controle.ultimoIndexProcessado = -1;
@@ -217,7 +219,7 @@ export abstract class PagedImportServiceBase<Entity, APIEntity extends APIRespon
     }
     if (!atualizado) return false;
     logger.info(`[updateControle] Atualizando.`);
-    const controleReturn = await this.controleService.repository.update(this.controle.id, {
+    await this.controleService.repository.update(this.controle.id, {
       pagina: this.controle.pagina,
       data: this.controle.data,
       ultimoIndexProcessado: this.controle.ultimoIndexProcessado,

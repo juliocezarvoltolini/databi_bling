@@ -1,9 +1,9 @@
 import { Venda } from 'src/app/venda/entities/venda.entity';
 import {
-    APICollection,
-    ImportServiceBase,
-    PagedImportServiceBase,
-    PaginacaoType,
+  APICollection,
+  ImportServiceBase,
+  PagedImportServiceBase,
+  PaginacaoType,
 } from '../import.interface';
 import { IFindResponse as VendaBling } from 'bling-erp-api/lib/entities/pedidosVendas/interfaces/find.interface';
 import { Inject, Injectable } from '@nestjs/common';
@@ -25,294 +25,290 @@ import { BlingApiService } from '../../bling-api.service';
 import { ControleImportacaoService } from 'src/app/controle-importacao/controle-importacao.service';
 
 class Totalizadores {
-    subtotal: number;
-    desconto: number;
-    descontoRateado: number;
-    total: number;
+  subtotal: number;
+  desconto: number;
+  descontoRateado: number;
+  total: number;
 
-    constructor() {
-        this.subtotal = 0;
-        this.desconto = 0;
-        this.descontoRateado = 0;
-        this.total = 0;
-    }
+  constructor() {
+    this.subtotal = 0;
+    this.desconto = 0;
+    this.descontoRateado = 0;
+    this.total = 0;
+  }
 }
 
 @Injectable()
 export class VendaBlingService extends ImportServiceBase<Venda, VendaBling> {
-    constructor(
-        responseLogService: ResponseLogService,
-        private produtoBlingService: ProdutoBlingService,
-        private pessoaBlingService: PessoaBlingService,
-        private vendedorBlingService: VendedorBlingService,
-        private formaPagamentoBlingService: FormaPagamentoBlingService,
-        private blingService: BlingApiService,
-        @Inject('DATA_SOURCE') private readonly dataSource: DataSource,
-    ) {
-        super(responseLogService, 'venda');
+  constructor(
+    responseLogService: ResponseLogService,
+    private produtoBlingService: ProdutoBlingService,
+    private pessoaBlingService: PessoaBlingService,
+    private vendedorBlingService: VendedorBlingService,
+    private formaPagamentoBlingService: FormaPagamentoBlingService,
+    private blingService: BlingApiService,
+    @Inject('DATA_SOURCE') private readonly dataSource: DataSource,
+  ) {
+    super(responseLogService, 'venda');
+  }
+
+  async getById(Entity?: Partial<VendaBling['data']>): Promise<Venda> {
+    logger.info(`[VendaBlingService] Selecionando venda Id(${Entity.id})`);
+    const vendaRepository = this.dataSource.getRepository(Venda);
+
+    const vendas = await vendaRepository.find({ where: { idOriginal: Entity.id.toFixed(0) } });
+    let venda: Venda = null;
+
+    if (Entity && vendas.length > 0) {
+      const newStatusVenda = Entity.situacao.id == 9 ? 'F' : 'C';
+      if (vendas[0].estado == newStatusVenda) {
+        logger.info(`[VendaBlingService] Encontrou a venda no banco de dados.`);
+        return vendas[0];
+      } else venda = vendas[0];
     }
 
-    async getById(Entity?: Partial<VendaBling['data']>): Promise<Venda> {
-        logger.info(`[VendaBlingService] Selecionando venda Id(${Entity.id})`);
-        const vendaRepository = this.dataSource.getRepository(Venda);
+    const cache = await this.getCachedEntity(Entity.id);
 
-        const vendas = await vendaRepository.find({ where: { idOriginal: Entity.id.toFixed(0) } });
-        let venda: Venda = null;
+    const vendaBling = await (
+      await this.blingService.getBling()
+    ).pedidosVendas.find({ idPedidoVenda: Entity.id });
+    logger.info(`[VendaBlingService] Salvando venda no cache`);
+    await this.saveCachedEntity(Entity.id.toFixed(0), vendaBling, cache ? cache.cache : null);
 
-        if (Entity && vendas.length > 0) {
-            const newStatusVenda = Entity.situacao.id == 9 ? 'F' : 'C';
-            if (vendas[0].estado == newStatusVenda) {
-                logger.info(`[VendaBlingService] Encontrou a venda no banco de dados.`);
-                return vendas[0];
-            } else venda = vendas[0];
-        }
+    return this.createVenda(venda, vendaBling);
+  }
 
-        const cache = await this.getCachedEntity(Entity.id);
+  private async createVenda(venda: Venda, response: VendaBling): Promise<Venda> {
+    const vendaBling = response.data;
 
-        const vendaBling = await (
-            await this.blingService.getBling()
-        ).pedidosVendas.find({ idPedidoVenda: Entity.id });
-        logger.info(`[VendaBlingService] Salvando venda no cache`);
-        await this.saveCachedEntity(Entity.id.toFixed(0), vendaBling, cache ? cache.cache : null);
+    if (!venda) venda = new Venda();
 
-        return this.createVenda(venda, vendaBling);
+    venda.idOriginal = vendaBling.id.toFixed(0);
+    venda.dataEmissao = dateBlingToDate(vendaBling.data);
+    venda.dataSaida = dateBlingToDate(vendaBling.dataSaida);
+
+    venda.empresa = new Empresa();
+    venda.identificador = response.data.numero.toFixed(0);
+    venda.empresa.id = 1;
+    venda.estado = response.data.situacao.id == 9 ? 'F' : 'C';
+    venda.outrasDespesas = vendaBling.outrasDespesas;
+    venda.frete = vendaBling.transporte.frete;
+    venda.total = vendaBling.total;
+
+    const [vendedorP, pessoaP, itensP, PagamentosP] = [
+      this.vendedorBlingService.getById(vendaBling.vendedor),
+      this.pessoaBlingService.getById(vendaBling.contato),
+      this.createItens(venda, vendaBling),
+      this.createPagamentos(vendaBling.parcelas, vendaBling, venda),
+    ];
+
+    const [vendedor, pessoa, itens, pagamentos] = await Promise.all([
+      vendedorP,
+      pessoaP,
+      itensP,
+      PagamentosP,
+    ]);
+
+    venda.vendedor = vendedor;
+    venda.pessoa = pessoa;
+    venda.subtotalProdutos = itens.totalizadores.subtotal;
+    venda.desconto_valor = itens.totalizadores.desconto;
+    venda.desconto_percentual = 0;
+    const descontoTotal = AppMath.sum(
+      itens.totalizadores.descontoRateado,
+      itens.totalizadores.desconto,
+    );
+    if (descontoTotal > 0) {
+      venda.desconto_percentual = AppMath.divide(descontoTotal, itens.totalizadores.subtotal);
+    }
+    venda.desconto_rateado_valor = itens.totalizadores.descontoRateado;
+
+    const vendaRepo = this.dataSource.getRepository(Venda);
+    venda = await vendaRepo.save(venda);
+
+    return venda;
+  }
+
+  private async createItens(
+    venda: Venda,
+    vendaBling: VendaBling['data'],
+  ): Promise<{ itens: Item[]; totalizadores: Totalizadores }> {
+    const itensBling = [...vendaBling.itens].sort((a, b) => a.id - b.id);
+
+    if (!venda.itens) venda.itens = [];
+
+    venda.itens.sort((a, b) => b.idOriginal.localeCompare(a.idOriginal));
+
+    const totalizadores = new Totalizadores();
+
+    for (const itemBling of itensBling) {
+      const produto = await this.produtoBlingService.getById(itemBling.produto);
+      const item = this.createItem(itemBling, produto, venda, venda.itens);
+
+      this.acumularTotalizadores(item, totalizadores);
+      venda.itens.push(item);
     }
 
-    private async createVenda(venda: Venda, response: VendaBling): Promise<Venda> {
-        const vendaBling = response.data;
+    this.ajustarDescontoVenda(vendaBling, venda.itens, totalizadores);
+    return { itens: venda.itens, totalizadores };
+  }
 
-        if (!venda) venda = new Venda();
+  private createItem(
+    itemBling: VendaBling['data']['itens'][0],
+    produto: Produto,
+    venda: Venda,
+    itensExistentes: Item[],
+  ): Item {
+    const idOriginal = itemBling.id.toFixed(0);
+    const item = itensExistentes.find((i) => i.idOriginal === idOriginal) || new Item();
 
-        venda.idOriginal = vendaBling.id.toFixed(0);
-        venda.dataEmissao = dateBlingToDate(vendaBling.data);
-        venda.dataSaida = dateBlingToDate(vendaBling.dataSaida);
+    let precoVenda = 0.0;
 
-        venda.empresa = new Empresa();
-        venda.identificador = response.data.numero.toFixed(0);
-        venda.empresa.id = 1;
-        venda.estado = response.data.situacao.id == 9 ? 'F' : 'C';
-        venda.outrasDespesas = vendaBling.outrasDespesas;
-        venda.frete = vendaBling.transporte.frete;
-        venda.total = vendaBling.total;
-
-        const [vendedorP, pessoaP, itensP, PagamentosP] = [
-            this.vendedorBlingService.getById(vendaBling.vendedor),
-            this.pessoaBlingService.getById(vendaBling.contato),
-            this.createItens(venda, vendaBling),
-            this.createPagamentos(vendaBling.parcelas, vendaBling, venda),
-        ];
-
-        const [vendedor, pessoa, itens, pagamentos] = await Promise.all([
-            vendedorP,
-            pessoaP,
-            itensP,
-            PagamentosP,
-        ]);
-
-        venda.vendedor = vendedor;
-        venda.pessoa = pessoa;
-        venda.subtotalProdutos = itens.totalizadores.subtotal;
-        venda.desconto_valor = itens.totalizadores.desconto;
-        venda.desconto_percentual = 0;
-        const descontoTotal = AppMath.sum(
-            itens.totalizadores.descontoRateado,
-            itens.totalizadores.desconto,
-        );
-        if (descontoTotal > 0) {
-            venda.desconto_percentual = AppMath.divide(descontoTotal, itens.totalizadores.subtotal);
-        }
-        venda.desconto_rateado_valor = itens.totalizadores.descontoRateado;
-
-        const vendaRepo = this.dataSource.getRepository(Venda);
-        venda = await vendaRepo.save(venda);
-        const itensRepo = this.dataSource.getRepository(Item);
-        const pagamentosRepo = this.dataSource.getRepository(VendaPagamento);
-        if (itens.itens.length == 0) logger.error(`[VendaBlingService] A Venda Bling(${vendaBling.id}) BD(${venda.id}) não possuí itens`)
-        await itensRepo.save(itens.itens);
-        if (pagamentos.length == 0) logger.error(`[VendaBlingService] A Venda Bling(${vendaBling.id}) BD(${venda.id}) não possuí pagamentos`)
-        await pagamentosRepo.save(pagamentos);
-
-        return venda;
+    if (itemBling.valor > 0.0) {
+      precoVenda = itemBling.desconto
+        ? AppMath.round(
+            itemBling.valor / (1 - itemBling.desconto / 100),
+            2,
+            RoundingModes.HALF_DOWN,
+          )
+        : itemBling.valor;
+    } else {
+      //Pode entrar aqui quando for concedido 100% de desconto sobre o item
+      if (itemBling.desconto > 0) {
+        precoVenda = produto.valorPreco;
+      }
     }
 
-    private async createItens(
-        venda: Venda,
-        vendaBling: VendaBling['data'],
-    ): Promise<{ itens: Item[]; totalizadores: Totalizadores }> {
-        const itensBling = [...vendaBling.itens].sort((a, b) => a.id - b.id);
-        const itemRepo = this.dataSource.getRepository(Item);
-
-        const itensExistentes = await itemRepo.find({
-            where: { venda: { idOriginal: vendaBling.id.toFixed(0) } },
-            order: { idOriginal: 'ASC' },
-        });
-
-        const itens: Item[] = [];
-        const totalizadores = new Totalizadores();
-
-        for (const itemBling of itensBling) {
-            const produto = await this.produtoBlingService.getById(itemBling.produto);
-            const item = this.createItem(itemBling, produto, venda, itensExistentes);
-
-            this.acumularTotalizadores(item, totalizadores);
-            itens.push(item);
-        }
-
-        this.ajustarDescontoVenda(vendaBling, itens, totalizadores);
-        return { itens, totalizadores };
+    if (itemBling.desconto > 0) {
+      const diferencaPreco = Math.abs(AppMath.sum(precoVenda, -produto.valorPreco));
+      if (diferencaPreco < 0.3) precoVenda = produto.valorPreco;
     }
 
-    private createItem(
-        itemBling: VendaBling['data']['itens'][0],
-        produto: Produto,
-        venda: Venda,
-        itensExistentes: Item[],
-    ): Item {
-        const idOriginal = itemBling.id.toFixed(0);
-        const item = itensExistentes.find((i) => i.idOriginal === idOriginal) || new Item();
+    const subtotalItem = AppMath.multiply(precoVenda, itemBling.quantidade);
+    const total = AppMath.multiply(itemBling.valor, itemBling.quantidade);
+    const descontoValor = itemBling.desconto ? AppMath.sum(subtotalItem, -total) : 0.0;
 
-        let precoVenda = 0.00;
+    item.identificador = itemBling.codigo;
+    item.idOriginal = idOriginal;
+    item.produto = produto;
+    item.valor = precoVenda;
+    item.total = total;
+    item.desconto_percentual = itemBling.desconto || 0.0;
+    item.desconto_valor = descontoValor;
+    item.quantidade = itemBling.quantidade;
+    item.unidade = itemBling.unidade;
+    item.estado = 'A';
+    item.data = venda.dataEmissao;
+    item.venda = venda;
 
-        if (itemBling.valor > 0.00) {
-            precoVenda = itemBling.desconto
-                ? AppMath.round(itemBling.valor / (1 - itemBling.desconto / 100), 2, RoundingModes.HALF_DOWN)
-                : itemBling.valor;
-        } else {
-            //Pode entrar aqui quando for concedido 100% de desconto sobre o item
-            if (itemBling.desconto > 0) {
-                precoVenda = produto.valorPreco;
-            }
-        }
+    return item;
+  }
 
+  private acumularTotalizadores(item: Item, totalizadores: Totalizadores): void {
+    totalizadores.desconto = AppMath.sum(totalizadores.desconto, item.desconto_valor);
+    totalizadores.subtotal = AppMath.sum(
+      totalizadores.subtotal,
+      AppMath.multiply(item.valor, item.quantidade),
+    );
+    totalizadores.total = AppMath.sum(totalizadores.total, item.total);
+  }
 
-        if (itemBling.desconto > 0) {
-            const diferencaPreco = Math.abs(AppMath.sum(precoVenda, -produto.valorPreco));
-            if (diferencaPreco < 0.3) precoVenda = produto.valorPreco;
-        }
+  private ajustarDescontoVenda(
+    vendaBling: VendaBling['data'],
+    itens: Item[],
+    totalizadores: Totalizadores,
+  ): void {
+    if (vendaBling.desconto.valor <= 0.0) return;
 
-        const subtotalItem = AppMath.multiply(precoVenda, itemBling.quantidade);
-        const total = AppMath.multiply(itemBling.valor, itemBling.quantidade);
-        const descontoValor = itemBling.desconto ? AppMath.sum(subtotalItem, -total) : 0.0;
+    const valorLiquidoProduto = AppMath.sum([
+      vendaBling.total,
+      -vendaBling.transporte.frete,
+      -vendaBling.outrasDespesas,
+    ]);
 
-        item.identificador = itemBling.codigo;
-        item.idOriginal = idOriginal;
-        item.produto = produto;
-        item.valor = precoVenda;
-        item.total = total;
-        item.desconto_percentual = itemBling.desconto || 0.0;
-        item.desconto_valor = descontoValor;
-        item.quantidade = itemBling.quantidade;
-        item.unidade = itemBling.unidade;
-        item.estado = 'A';
-        item.data = venda.dataEmissao;
-        item.venda = venda;
+    let descontoVenda = 0.0;
 
-        return item;
+    if (vendaBling.desconto.unidade == 'REAL') descontoVenda = vendaBling.desconto.valor;
+    else descontoVenda = AppMath.sum(totalizadores.total, -valorLiquidoProduto);
+
+    if (descontoVenda <= 0.0) return;
+
+    let restoDesconto = descontoVenda;
+
+    totalizadores.descontoRateado = 0;
+    totalizadores.total = 0;
+
+    for (const [index, item] of itens.entries()) {
+      const subtotalItem = AppMath.multiply(item.valor, item.quantidade);
+      const razao = AppMath.divide(subtotalItem, totalizadores.subtotal);
+
+      const isUltimo = index === itens.length - 1;
+      const descontoRateado = isUltimo
+        ? restoDesconto
+        : Math.min(AppMath.multiply(razao, descontoVenda), restoDesconto);
+
+      item.desconto_rateado_valor = descontoRateado;
+      item.desconto_percentual = AppMath.divide(
+        item.desconto_valor + descontoRateado,
+        item.desconto_valor + descontoRateado + item.total,
+      );
+
+      item.total = AppMath.sum(item.total, -descontoRateado);
+      restoDesconto = AppMath.sum(restoDesconto, -descontoRateado);
+
+      totalizadores.descontoRateado = AppMath.sum(totalizadores.descontoRateado, descontoRateado);
+      totalizadores.total = AppMath.sum(totalizadores.total, item.total);
+    }
+  }
+
+  private async createPagamentos(
+    pagamentosBling: VendaBling['data']['parcelas'],
+    vendaBling: VendaBling['data'],
+    venda: Venda,
+  ): Promise<VendaPagamento[]> {
+    // Ordena os itensBling por id
+    pagamentosBling.sort((a, b) => a.id - b.id);
+
+    if (!venda.pagamentos) venda.pagamentos = [];
+
+    venda.pagamentos.sort((a, b) => b.idOriginal.localeCompare(a.idOriginal));
+
+    for (const pagamentoBling of pagamentosBling) {
+      const formaPagamento = await this.formaPagamentoBlingService.getById(
+        pagamentoBling.formaPagamento,
+      );
+      const pagamento =
+        venda.pagamentos.find((value) => value.idOriginal == pagamentoBling.id.toFixed(0)) ||
+        new VendaPagamento();
+      pagamento.formaPagamento = formaPagamento;
+      pagamento.idOriginal = pagamentoBling.id.toFixed(0);
+      pagamento.dataVencimento = dateBlingToDate(pagamentoBling.dataVencimento);
+      pagamento.dataEmissao = venda.dataEmissao;
+      pagamento.observacao = pagamentoBling.observacoes;
+      pagamento.valor = pagamentoBling.valor;
+
+      venda.pagamentos.push(pagamento);
     }
 
-    private acumularTotalizadores(item: Item, totalizadores: Totalizadores): void {
-        totalizadores.desconto = AppMath.sum(totalizadores.desconto, item.desconto_valor);
-        totalizadores.subtotal = AppMath.sum(
-            totalizadores.subtotal,
-            AppMath.multiply(item.valor, item.quantidade),
-        );
-        totalizadores.total = AppMath.sum(totalizadores.total, item.total);
-    }
-
-    private ajustarDescontoVenda(
-        vendaBling: VendaBling['data'],
-        itens: Item[],
-        totalizadores: Totalizadores,
-    ): void {
-        if (vendaBling.desconto.valor <= 0.0) return;
-
-        const valorLiquidoProduto = AppMath.sum([vendaBling.total, -vendaBling.transporte.frete, -vendaBling.outrasDespesas]);
-
-        let descontoVenda = 0.00;
-
-        if (vendaBling.desconto.unidade == 'REAL') descontoVenda = vendaBling.desconto.valor
-        else descontoVenda = AppMath.sum(totalizadores.total, -valorLiquidoProduto);
-
-        if (descontoVenda <= 0.0) return;
-
-        let restoDesconto = descontoVenda;
-
-        totalizadores.descontoRateado = 0;
-        totalizadores.total = 0;
-
-        for (const [index, item] of itens.entries()) {
-            const subtotalItem = AppMath.multiply(item.valor, item.quantidade);
-            const razao = AppMath.divide(subtotalItem, totalizadores.subtotal);
-
-            const isUltimo = index === itens.length - 1;
-            const descontoRateado = isUltimo
-                ? restoDesconto
-                : Math.min(AppMath.multiply(razao, descontoVenda), restoDesconto);
-
-            item.desconto_rateado_valor = descontoRateado;
-            item.desconto_percentual = AppMath.divide(
-                item.desconto_valor + descontoRateado,
-                item.desconto_valor + descontoRateado + item.total,
-            );
-
-            item.total = AppMath.sum(item.total, -descontoRateado);
-            restoDesconto = AppMath.sum(restoDesconto, -descontoRateado);
-
-            totalizadores.descontoRateado = AppMath.sum(totalizadores.descontoRateado, descontoRateado);
-            totalizadores.total = AppMath.sum(totalizadores.total, item.total);
-        }
-    }
-
-    private async createPagamentos(
-        pagamentosBling: VendaBling['data']['parcelas'],
-        vendaBling: VendaBling['data'],
-        venda: Venda,
-    ): Promise<VendaPagamento[]> {
-        // Ordena os itensBling por id
-        pagamentosBling.sort((a, b) => a.id - b.id);
-
-        const pagamentoRepo = this.dataSource.getRepository(VendaPagamento);
-        const pagamentos = await pagamentoRepo.find({
-            where: { venda: { idOriginal: vendaBling.id.toFixed(0) } },
-            order: { idOriginal: 'ASC' },
-        });
-
-        for (const pagamentoBling of pagamentosBling) {
-            const formaPagamento = await this.formaPagamentoBlingService.getById(
-                pagamentoBling.formaPagamento,
-            );
-            const pagamento =
-                pagamentos.find((value) => value.idOriginal == pagamentoBling.id.toFixed(0)) ||
-                new VendaPagamento();
-            pagamento.formaPagamento = formaPagamento;
-            pagamento.idOriginal = pagamentoBling.id.toFixed(0);
-            pagamento.dataVencimento = dateBlingToDate(pagamentoBling.dataVencimento);
-            pagamento.dataEmissao = venda.dataEmissao;
-            pagamento.observacao = pagamentoBling.observacoes;
-            pagamento.valor = pagamentoBling.valor;
-
-            pagamentos.push(pagamento);
-        }
-
-        return pagamentos;
-    }
+    return venda.pagamentos;
+  }
 }
 
 @Injectable()
 export class VendaBlingPagedService extends PagedImportServiceBase<Venda, VendaBling> {
-    constructor(
-        controleImportacaoService: ControleImportacaoService,
-        private readonly blingService: BlingApiService,
-        private vendaBlingService: VendaBlingService,
-    ) {
-        super('venda', controleImportacaoService, PaginacaoType.DATE, vendaBlingService);
-    }
-    async searchPage(searchParameters?: Record<string, any>): Promise<APICollection<VendaBling>> {
-        const bling = await this.blingService.getBling();
-        const pagina = await bling.pedidosVendas.get(searchParameters);
-        return pagina;
-    }
-    readAndSave(blingEntity: Partial<VendaBling['data']>): Promise<Venda> {
-        return this.vendaBlingService.getById(blingEntity);
-    }
+  constructor(
+    controleImportacaoService: ControleImportacaoService,
+    private readonly blingService: BlingApiService,
+    private vendaBlingService: VendaBlingService,
+  ) {
+    super('venda', controleImportacaoService, PaginacaoType.DATE, vendaBlingService);
+  }
+  async searchPage(searchParameters?: Record<string, any>): Promise<APICollection<VendaBling>> {
+    const bling = await this.blingService.getBling();
+    const pagina = await bling.pedidosVendas.get(searchParameters);
+    return pagina;
+  }
+  readAndSave(blingEntity: Partial<VendaBling['data']>): Promise<Venda> {
+    return this.vendaBlingService.getById(blingEntity);
+  }
 }
