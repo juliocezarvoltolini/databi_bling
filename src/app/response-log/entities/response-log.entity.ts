@@ -1,4 +1,4 @@
-import { Column, Entity, PrimaryGeneratedColumn, Unique } from 'typeorm';
+import { Column, Entity, PrimaryGeneratedColumn, Unique, UpdateDateColumn } from 'typeorm';
 
 @Entity({ name: 'response_log' })
 @Unique('response_log_nome_informacao_e_id_original_unique', ['nomeInformacao', 'idOriginal'])
@@ -11,6 +11,7 @@ export class ResponseLog {
   response: string;
   @Column({ name: 'id_original', type: 'varchar', length: 50 })
   idOriginal: string;
-  @Column({ name: 'data', type: 'timestamp', nullable: true })
-  data: Date;
+
+  @UpdateDateColumn({ name: 'atualizado_em', type: 'timestamp with time zone', nullable: true }) // PostgreSQL
+  atualizadoEm: Date;
 }

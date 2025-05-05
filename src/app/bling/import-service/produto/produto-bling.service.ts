@@ -19,8 +19,15 @@ import { Injectable } from '@nestjs/common';
 
 @Injectable()
 export class ProdutoBlingService extends ImportServiceBase<Produto, ProdutoBling> {
-  async getById(Entity?: Partial<ProdutoBling['data']>): Promise<Produto>;
-  async getById(Entity?: Partial<ProdutoBling['data']>, force?: boolean): Promise<Produto> {
+  public async getByIdForce(Entity?: Partial<ProdutoBling['data']>) {
+    return this.getByIdInternal(true, Entity);
+  }
+
+  async getById(Entity?: Partial<ProdutoBling['data']>): Promise<Produto> {
+    return this.getByIdInternal(false, Entity);
+  }
+
+  private async getByIdInternal(force: boolean, Entity: Partial<ProdutoBling['data']>) {
     logger.info(`[ProdutoBlingService] Selecionando produto Id(${Entity.id})`);
     const produtos = await firstValueFrom(
       this.produtoService.find({ idOriginal: Entity.id.toFixed(0) }),
@@ -28,19 +35,26 @@ export class ProdutoBlingService extends ImportServiceBase<Produto, ProdutoBling
 
     let produto: Produto;
 
-    if (!force) force = false;
     if (produtos.length > 0) {
-      if (!force) {
+      if (force) {
+        produto = produtos[0];
+      } else {
         logger.info(
           `[ProdutoBlingService] Encontrou produto no banco de dados.${produtos[0].id}-${produtos[0].descricao}`,
         );
         return produtos[0];
-      } else produto = produtos[0];
+      }
     }
 
     let produtoBling: ProdutoBling;
     const produtoCached = await this.getCachedEntity(Entity.id);
-    if (produtoCached) {
+    const quinzeDiasAtras = new Date();
+    quinzeDiasAtras.setDate(quinzeDiasAtras.getDate() - 15);
+    if (
+      produtoCached &&
+      produtoCached.cache.atualizadoEm &&
+      produtoCached.cache.atualizadoEm > quinzeDiasAtras
+    ) {
       logger.info(
         `[ProdutoBlingService] Encontrou produto no cache ${produtoCached.cache.idOriginal}`,
       );
@@ -58,18 +72,22 @@ export class ProdutoBlingService extends ImportServiceBase<Produto, ProdutoBling
       }
 
       logger.info(
-        `[ProdutoBlingService] Salvando produto no cache${produtoBling.data.id}-${produtoBling.data.nome}`,
+        `[ProdutoBlingService] Salvando produto no cache ${produtoBling.data.id}-${produtoBling.data.nome}`,
       );
       if (produtoCached)
         await this.saveCachedEntity(Entity.id.toFixed(0), produtoBling, produtoCached.cache);
       else await this.saveCachedEntity(Entity.id.toFixed(0), produtoBling);
     }
 
-    return this.createProduto(produto, produtoBling);
+    return this.createProduto(produto, produtoBling, force);
   }
 
-  private async createProduto(produto: Produto, produtoBling: ProdutoBling): Promise<Produto> {
-    const update = produto ? true : false;
+  private async createProduto(
+    produto: Produto,
+    produtoBling: ProdutoBling,
+    force: boolean,
+  ): Promise<Produto> {
+    const update = produto && produto.id == 0 ? true : false;
     logger.info(`[ProdutoBlingService] ${update ? 'Atualizando' : 'Criando'} Produto`);
     const fornecedorP = this.fornecedorService.getById(produtoBling.data.fornecedor);
 
@@ -92,7 +110,7 @@ export class ProdutoBlingService extends ImportServiceBase<Produto, ProdutoBling
         id: produtoBling.data.variacao?.produtoPai.id,
       };
 
-      produtoPai = await this.getById(produtoPaiBling);
+      produtoPai = await this.getByIdInternal(force, produtoPaiBling);
     }
 
     const [fornecedor, marca, categoria, variacoes] = await Promise.all([
@@ -162,6 +180,6 @@ export class ProdutoBlingPagedService extends PagedImportServiceBase<Produto, Pr
     return pagina;
   }
   readAndSave(blingEntity: Partial<ProdutoBling['data']>): Promise<Produto> {
-    return this.produtoBlingService.getById(blingEntity);
+    return this.produtoBlingService.getByIdForce(blingEntity);
   }
 }

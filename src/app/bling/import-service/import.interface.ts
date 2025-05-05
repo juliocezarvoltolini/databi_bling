@@ -42,16 +42,11 @@ export abstract class ImportServiceBase<Entity, APIEntity extends APIResponse<AP
       response.idOriginal = id;
       response.nomeInformacao = this.entity;
       response.response = JSON.stringify(blingEntity);
-      response.data = new Date();
     } else {
       response.response = JSON.stringify(blingEntity);
-      response.data = new Date();
     }
-    if (response.id) {
-      await lastValueFrom(this.responseLogService.update(response.id, response));
-      return;
-    }
-    await lastValueFrom(this.responseLogService.create(response));
+
+    await this.responseLogService.repository.save(response);
     return;
   }
 
