@@ -13,25 +13,29 @@ import { firstValueFrom } from 'rxjs';
 import { logger } from 'src/logger/winston.logger';
 import { BlingApiService } from '../../bling-api.service';
 import { ProdutoCategoriaBlingService } from './categoria-produto-bling.service';
-import {
-  ProdutoCategoriaOpcao,
-  ProdutoCategoriaRelacao,
-} from 'src/app/produto/entities/produto-categoria.entity';
+import { ProdutoCategoriaOpcao } from 'src/app/produto/entities/produto-categoria.entity';
 import { ControleImportacaoService } from 'src/app/controle-importacao/controle-importacao.service';
 import { Injectable } from '@nestjs/common';
 
 @Injectable()
 export class ProdutoBlingService extends ImportServiceBase<Produto, ProdutoBling> {
-  async getById(Entity?: Partial<ProdutoBling['data']>): Promise<Produto> {
+  async getById(Entity?: Partial<ProdutoBling['data']>): Promise<Produto>;
+  async getById(Entity?: Partial<ProdutoBling['data']>, force?: boolean): Promise<Produto> {
     logger.info(`[ProdutoBlingService] Selecionando produto Id(${Entity.id})`);
     const produtos = await firstValueFrom(
       this.produtoService.find({ idOriginal: Entity.id.toFixed(0) }),
     );
+
+    let produto: Produto;
+
+    if (!force) force = false;
     if (produtos.length > 0) {
-      logger.info(
-        `[ProdutoBlingService] Encontrou produto no banco de dados.${produtos[0].id}-${produtos[0].descricao}`,
-      );
-      return produtos[0];
+      if (!force) {
+        logger.info(
+          `[ProdutoBlingService] Encontrou produto no banco de dados.${produtos[0].id}-${produtos[0].descricao}`,
+        );
+        return produtos[0];
+      } else produto = produtos[0];
     }
 
     let produtoBling: ProdutoBling;
@@ -56,10 +60,12 @@ export class ProdutoBlingService extends ImportServiceBase<Produto, ProdutoBling
       logger.info(
         `[ProdutoBlingService] Salvando produto no cache${produtoBling.data.id}-${produtoBling.data.nome}`,
       );
-      await this.saveCachedEntity(Entity.id.toFixed(0), produtoBling);
+      if (produtoCached)
+        await this.saveCachedEntity(Entity.id.toFixed(0), produtoBling, produtoCached.cache);
+      else await this.saveCachedEntity(Entity.id.toFixed(0), produtoBling);
     }
 
-    return this.createProduto(null, produtoBling);
+    return this.createProduto(produto, produtoBling);
   }
 
   private async createProduto(produto: Produto, produtoBling: ProdutoBling): Promise<Produto> {
@@ -67,14 +73,14 @@ export class ProdutoBlingService extends ImportServiceBase<Produto, ProdutoBling
     logger.info(`[ProdutoBlingService] ${update ? 'Atualizando' : 'Criando'} Produto`);
     const fornecedorP = this.fornecedorService.getById(produtoBling.data.fornecedor);
 
-    const marcaP =
+    const marcaP: Promise<ProdutoCategoriaOpcao> =
       produtoBling.data.marca.length > 0
         ? this.produtoCategoriaOpcaoService.getMarcaAsOpcao(produtoBling.data.marca)
         : Promise.resolve(null);
-    const categoriaP = produtoBling.data.categoria
+    const categoriaP: Promise<ProdutoCategoriaOpcao> = produtoBling.data.categoria
       ? this.produtoCategoriaOpcaoService.getById(produtoBling.data.categoria)
       : Promise.resolve(null);
-    const variacoesP = produtoBling.data.variacao
+    const variacoesP: Promise<ProdutoCategoriaOpcao[]> = produtoBling.data.variacao
       ? this.produtoCategoriaOpcaoService.getVariacoesAsOpcoes(produtoBling.data.variacao?.nome)
       : Promise.resolve(null);
 
@@ -111,21 +117,14 @@ export class ProdutoBlingService extends ImportServiceBase<Produto, ProdutoBling
     produto.valorCusto = produtoBling.data.fornecedor ? produtoBling.data.fornecedor.precoCusto : 0;
     produto.valorPreco = produtoBling.data.preco;
     produto.produtoPai = produtoPai;
-    produto.categoriasOpcao = [];
 
-    if (categoria) {
-      produto.categoriasOpcao = produto.categoriasOpcao.concat(
-        this.criarRelacao(produto, categoria),
-      );
-    }
-    if (marca) {
-      produto.categoriasOpcao = produto.categoriasOpcao.concat(this.criarRelacao(produto, marca));
-    }
-    if (variacoes) {
-      produto.categoriasOpcao = produto.categoriasOpcao.concat(
-        this.criarRelacao(produto, variacoes),
-      );
-    }
+    produto.categorias = produto.categorias ?? [];
+    produto.categorias.length = 0;
+
+    if (categoria) produto.categorias.push(categoria);
+    if (marca) produto.categorias.push(marca);
+    if (variacoes) produto.categorias = produto.categorias.concat(variacoes);
+
     try {
       return this.produtoService.repository.save(produto);
     } catch (error) {
@@ -135,23 +134,6 @@ export class ProdutoBlingService extends ImportServiceBase<Produto, ProdutoBling
       );
       throw error;
     }
-  }
-
-  private criarRelacao(
-    produto: Produto,
-    opcao: ProdutoCategoriaOpcao | ProdutoCategoriaOpcao[],
-  ): ProdutoCategoriaRelacao[] {
-    const criar = (opcao: ProdutoCategoriaOpcao, produto: Produto) => {
-      const relacao = new ProdutoCategoriaRelacao();
-      relacao.produto = produto;
-      relacao.produtoCategoriaOpcao = opcao;
-      return relacao;
-    };
-    if (Array.isArray(opcao)) {
-      const relacoes = opcao.map((op) => criar(op, produto));
-      return relacoes;
-    }
-    return [criar(opcao, produto)];
   }
 
   constructor(

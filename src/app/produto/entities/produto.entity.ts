@@ -1,7 +1,15 @@
-import { Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column,
+  Entity,
+  JoinColumn,
+  JoinTable,
+  ManyToMany,
+  ManyToOne,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
 import { Formato } from './produto.types';
 import { Fornecedor } from 'src/app/fornecedor/entities/fornecedor.entity';
-import { ProdutoCategoriaRelacao } from './produto-categoria.entity';
+import { ProdutoCategoriaOpcao } from './produto-categoria.entity';
 
 @Entity('produto')
 export class Produto {
@@ -35,12 +43,19 @@ export class Produto {
   valorCusto: number;
   @Column({ name: 'id_original', type: 'varchar', length: 50, unique: true })
   idOriginal: string;
-  @OneToMany(() => ProdutoCategoriaRelacao, (rel) => rel.produto, {
-    cascade: true,
-    eager: true,
-    orphanedRowAction: 'delete',
+  @ManyToMany(() => ProdutoCategoriaOpcao, { eager: true, cascade: true })
+  @JoinTable({
+    name: 'produto_categotia_opacao_relacao',
+    joinColumn: {
+      name: 'produto',
+      referencedColumnName: 'id',
+    },
+    inverseJoinColumn: {
+      name: 'produto_categoria_opcao',
+      referencedColumnName: 'id',
+    },
   })
-  categoriasOpcao: ProdutoCategoriaRelacao[];
+  categorias: ProdutoCategoriaOpcao[];
   @Column({ name: 'identificador', type: 'varchar', length: 50, nullable: true })
   identificador: string;
 }

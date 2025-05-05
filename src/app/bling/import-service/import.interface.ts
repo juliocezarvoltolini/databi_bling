@@ -93,6 +93,9 @@ export abstract class PagedImportServiceBase<Entity, APIEntity extends APIRespon
     logger.info(`[PagedImportService] Iniciando importação da entidade ${this.entity}`);
     await this.getControle();
 
+    this.controle.iniciouConsultaEm = new Date();
+    this.controle.terminouConsultaEm = null;
+
     let searchParameters: Record<string, any> = this.controle.parametros ?? {};
     searchParameters['pagina'] = this.controle.pagina;
     searchParameters['limite'] = 100;
@@ -127,6 +130,8 @@ export abstract class PagedImportServiceBase<Entity, APIEntity extends APIRespon
         throw error;
       }
     }
+
+    this.controle.terminouConsultaEm = new Date();
 
     let temProximaPagina = false;
     switch (this.paginacaoType) {
@@ -223,6 +228,8 @@ export abstract class PagedImportServiceBase<Entity, APIEntity extends APIRespon
       pagina: this.controle.pagina,
       data: this.controle.data,
       ultimoIndexProcessado: this.controle.ultimoIndexProcessado,
+      iniciouConsultaEm: this.controle.iniciouConsultaEm,
+      terminouConsultaEm: this.controle.terminouConsultaEm,
     });
     return true;
   }

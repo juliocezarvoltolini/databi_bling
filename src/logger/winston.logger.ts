@@ -15,7 +15,17 @@ const customFormat = format.printf(({ timestamp, level, message, stack }) => {
 export function buildWinstonLogger(): Logger {
   return createLogger({
     level: process.env.NODE_ENV === 'production' ? 'info' : 'silly',
-    format: format.combine(format.timestamp(), format.errors({ stack: true }), customFormat),
+    format: format.combine(
+      format.timestamp({
+        format: () =>
+          new Date().toLocaleString('pt-BR', {
+            timeZone: 'America/Araguaina',
+            hour12: false,
+          }),
+      }),
+      format.errors({ stack: true }),
+      customFormat,
+    ),
     transports: [
       new transports.Console({ level: 'silly' }),
       new DailyRotateFile({
