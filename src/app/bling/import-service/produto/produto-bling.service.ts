@@ -16,6 +16,9 @@ import { ProdutoCategoriaBlingService } from './categoria-produto-bling.service'
 import { ProdutoCategoriaOpcao } from 'src/app/produto/entities/produto-categoria.entity';
 import { ControleImportacaoService } from 'src/app/controle-importacao/controle-importacao.service';
 import { Injectable } from '@nestjs/common';
+import { IsNull } from 'typeorm';
+import { AppMath } from 'src/shared/util/operacoes-matematicas/app-math-operations';
+import { RoundingModes } from 'src/shared/util/operacoes-matematicas/big-decimal-operations.copy';
 
 @Injectable()
 export class ProdutoBlingService extends ImportServiceBase<Produto, ProdutoBling> {
@@ -49,7 +52,7 @@ export class ProdutoBlingService extends ImportServiceBase<Produto, ProdutoBling
     let produtoBling: ProdutoBling;
     const produtoCached = await this.getCachedEntity(Entity.id);
     const quinzeDiasAtras = new Date();
-    quinzeDiasAtras.setDate(quinzeDiasAtras.getDate() - 15);
+    quinzeDiasAtras.setDate(quinzeDiasAtras.getDate() - 60);
     if (
       produtoCached &&
       produtoCached.cache.atualizadoEm &&
@@ -89,7 +92,18 @@ export class ProdutoBlingService extends ImportServiceBase<Produto, ProdutoBling
   ): Promise<Produto> {
     const update = produto && produto.id == 0 ? true : false;
     logger.info(`[ProdutoBlingService] ${update ? 'Atualizando' : 'Criando'} Produto`);
-    const fornecedorP = this.fornecedorService.getById(produtoBling.data.fornecedor);
+    const fornecedorP = this.fornecedorService.getById(produtoBling.data.fornecedor.contato);
+
+    let produtoPaiBling: Partial<ProdutoBling['data']> = null;
+    let produtoPai: Produto = null;
+
+    if (produtoBling.data.variacao) {
+      produtoPaiBling = {
+        id: produtoBling.data.variacao?.produtoPai.id,
+      };
+
+      produtoPai = await this.getByIdInternal(force, produtoPaiBling);
+    }
 
     const marcaP: Promise<ProdutoCategoriaOpcao> =
       produtoBling.data.marca.length > 0
@@ -102,16 +116,6 @@ export class ProdutoBlingService extends ImportServiceBase<Produto, ProdutoBling
       ? this.produtoCategoriaOpcaoService.getVariacoesAsOpcoes(produtoBling.data.variacao?.nome)
       : Promise.resolve(null);
 
-    let produtoPaiBling: Partial<ProdutoBling['data']> = null;
-    let produtoPai: Produto = null;
-
-    if (produtoBling.data.variacao) {
-      produtoPaiBling = {
-        id: produtoBling.data.variacao?.produtoPai.id,
-      };
-
-      produtoPai = await this.getByIdInternal(force, produtoPaiBling);
-    }
 
     const [fornecedor, marca, categoria, variacoes] = await Promise.all([
       fornecedorP,
@@ -171,6 +175,7 @@ export class ProdutoBlingPagedService extends PagedImportServiceBase<Produto, Pr
     controleImportacaoService: ControleImportacaoService,
     private readonly blingService: BlingApiService,
     private produtoBlingService: ProdutoBlingService,
+    private produtoService: ProdutoService
   ) {
     super('produto', controleImportacaoService, PaginacaoType.INDEX, produtoBlingService);
   }
@@ -181,5 +186,29 @@ export class ProdutoBlingPagedService extends PagedImportServiceBase<Produto, Pr
   }
   readAndSave(blingEntity: Partial<ProdutoBling['data']>): Promise<Produto> {
     return this.produtoBlingService.getByIdForce(blingEntity);
+  }
+
+  async seacrhProdutosInativos(): Promise<void> {
+    const quantidade = await this.produtoService.repository.count({ where: { fornecedor: IsNull() } });
+    const take = 100;
+    const paginas = AppMath.round((quantidade / 100), 0, RoundingModes.CEILING);
+
+    for (let index = 0; index < paginas - 1; index++) {
+      const skip = index * 100;
+      const produtos = await this.produtoService.repository.find({
+        where: {
+          fornecedor: IsNull()
+        },
+        skip,
+        take,
+        order: { id: 'DESC' }
+      });
+
+      for (let index = 0; index < produtos.length - 1; index++) {
+        await this.produtoBlingService.getByIdForce({ id: parseInt(produtos[index].idOriginal) });
+      }
+
+    }
+
   }
 }

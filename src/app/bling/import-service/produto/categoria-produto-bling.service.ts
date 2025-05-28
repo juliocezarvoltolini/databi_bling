@@ -23,10 +23,14 @@ export class ProdutoCategoriaBlingService extends ImportServiceBase<
     let categoriaBling: CategoriaBling;
     if (categoriaCached) categoriaBling = categoriaCached.entity;
     else {
+      logger.info(`[ProdutoCategoriaBlingService] Vai buscar categoria Id(${Entity.id}) na API`);
       categoriaBling = await (
         await this.blingService.getBling()
       ).categoriasProdutos.find({
         idCategoriaProduto: Entity.id,
+      }).then((value) => value, (err) => {
+        logger.error(`Categoria ${JSON.stringify(Entity)} não encontrada.`)
+        return null;
       });
       logger.info(
         `[ProdutoCategoriaBlingService] Salvando categoria no cache ${categoriaBling.data.id}-${categoriaBling.data.descricao}`,

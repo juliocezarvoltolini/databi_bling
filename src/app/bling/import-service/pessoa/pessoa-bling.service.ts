@@ -20,6 +20,7 @@ import { BlingApiService } from 'src/app/bling/bling-api.service';
 @Injectable()
 export class PessoaBlingService extends ImportServiceBase<Pessoa, PessoaBling> {
   async getById(Entity?: Partial<PessoaBling['data']>): Promise<Pessoa> {
+    logger.info(`[ClienteBlingService] Selecionando a pessoa (${Entity.id}).`);
     const pessoas = await firstValueFrom(this.servicePessoa.find({ idOriginal: Entity.id.toFixed(0) }));
     if (pessoas.length > 0) {
       logger.info('[ClienteBlingService] Encontrou a pessoa');

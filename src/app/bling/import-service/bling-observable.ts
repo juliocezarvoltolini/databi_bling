@@ -2,7 +2,7 @@ import { Injectable, OnModuleInit } from '@nestjs/common';
 import { PagedImportServiceBase } from './import.interface';
 import { PessoaBlingPagedService } from './pessoa/pessoa-bling.service';
 import { logger } from 'src/logger/winston.logger';
-import { ProdutoBlingPagedService } from './produto/produto-bling.service';
+import { ProdutoBlingPagedService, ProdutoBlingService } from './produto/produto-bling.service';
 import { VendaBlingPagedService } from './venda/venda-bling.service';
 import { NfeBlingPagedService } from './nfe/nfe-bling.service';
 import { ConfigService } from '@nestjs/config';
@@ -16,18 +16,20 @@ export class BlingObservable implements OnModuleInit {
 
   constructor(
     private readonly clienteBlingService: PessoaBlingPagedService,
-    private readonly produtoBlingService: ProdutoBlingPagedService,
+    private readonly produtoBlingPagedService: ProdutoBlingPagedService,
+    private readonly produtoBlingService: ProdutoBlingService,
     private readonly vendaBlingService: VendaBlingPagedService,
     private readonly nfeBlingService: NfeBlingPagedService,
     private readonly configService: ConfigService,
   ) {
-    this.subscriptions.push(produtoBlingService);
+    // this.subscriptions.push(produtoBlingPagedService);   
     this.subscriptions.push(vendaBlingService);
     this.subscriptions.push(nfeBlingService);
     this.FIVE_HOURS = this.configService.get<number>('INTERVALO_SERVICO_BLING', 5) * 60 * 60 * 1000;
   }
 
   async onModuleInit() {
+    
     logger.info('🟢 BlingObservable iniciado');
     this.executeImport().then(() => this.scheduleNextRun());
   }
