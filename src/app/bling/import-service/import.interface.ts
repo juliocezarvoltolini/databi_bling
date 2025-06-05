@@ -84,9 +84,14 @@ export abstract class PagedImportServiceBase<Entity, APIEntity extends APIRespon
     protected readonly importService: ImportService<Entity, APIEntity>,
   ) {}
 
+  async resetControle(): Promise<void> {
+    return;
+  }
+
   async start(): Promise<void> {
     logger.info(`[PagedImportService] Iniciando importação da entidade ${this.entity}`);
     await this.getControle();
+    await this.resetControle();
 
     this.controle.iniciouConsultaEm = new Date();
     this.controle.terminouConsultaEm = null;

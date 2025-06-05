@@ -23,6 +23,7 @@ import { FormaPagamentoBlingService } from '../forma-pagamento/forma-pagamento-b
 import { logger } from 'src/logger/winston.logger';
 import { BlingApiService } from '../../bling-api.service';
 import { ControleImportacaoService } from 'src/app/controle-importacao/controle-importacao.service';
+import { subtrairMeses } from 'src/shared/util/date/date.utils';
 
 class Totalizadores {
   subtotal: number;
@@ -55,13 +56,15 @@ export class VendaBlingService extends ImportServiceBase<Venda, VendaBling> {
   async getById(Entity?: Partial<VendaBling['data']>): Promise<Venda> {
     logger.info(`[VendaBlingService] Selecionando venda Id(${Entity.id})`);
     const vendaRepository = this.dataSource.getRepository(Venda);
+    let alterouTotal = false;
 
     const vendas = await vendaRepository.find({ where: { idOriginal: Entity.id.toFixed(0) } });
     let venda: Venda = null;
 
     if (Entity && vendas.length > 0) {
       const newStatusVenda = Entity.situacao.id == 9 ? 'F' : 'C';
-      if (vendas[0].estado == newStatusVenda) {
+      alterouTotal = Entity.totalProdutos != vendas[0].total;
+      if (vendas[0].estado == newStatusVenda && !alterouTotal) {
         logger.info(`[VendaBlingService] Encontrou a venda no banco de dados.`);
         return vendas[0];
       } else venda = vendas[0];
@@ -72,6 +75,7 @@ export class VendaBlingService extends ImportServiceBase<Venda, VendaBling> {
     const vendaBling = await (
       await this.blingService.getBling()
     ).pedidosVendas.find({ idPedidoVenda: Entity.id });
+
     logger.info(`[VendaBlingService] Salvando venda no cache`);
     await this.saveCachedEntity(Entity.id.toFixed(0), vendaBling, cache ? cache.cache : null);
 
@@ -102,12 +106,7 @@ export class VendaBlingService extends ImportServiceBase<Venda, VendaBling> {
       this.createPagamentos(vendaBling.parcelas, vendaBling, venda),
     ];
 
-    const [vendedor, pessoa, itens, pagamentos] = await Promise.all([
-      vendedorP,
-      pessoaP,
-      itensP,
-      PagamentosP,
-    ]);
+    const [vendedor, pessoa, itens] = await Promise.all([vendedorP, pessoaP, itensP, PagamentosP]);
 
     venda.vendedor = vendedor;
     venda.pessoa = pessoa;
@@ -302,6 +301,18 @@ export class VendaBlingPagedService extends PagedImportServiceBase<Venda, VendaB
     private vendaBlingService: VendaBlingService,
   ) {
     super('venda', controleImportacaoService, PaginacaoType.DATE, vendaBlingService);
+  }
+
+  resetControle(): Promise<void> {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    //Toda segunda ou quinta feira vai buscar os últimos 4 meses.
+    if (this.controle.atualizadoEm < today && [1, 4].includes(today.getDay())) {
+      this.controle.data = subtrairMeses(this.controle.data, 4);
+      this.controle.pagina = 0;
+      this.controle.ultimoIndexProcessado = -1;
+    }
+    return;
   }
   async searchPage(searchParameters?: Record<string, any>): Promise<APICollection<VendaBling>> {
     const bling = await this.blingService.getBling();
