@@ -247,10 +247,13 @@ export class VendaBlingService extends ImportServiceBase<Venda, VendaBling> {
         : Math.min(AppMath.multiply(razao, descontoVenda), restoDesconto);
 
       item.desconto_rateado_valor = descontoRateado;
-      item.desconto_percentual = AppMath.divide(
-        item.desconto_valor + descontoRateado,
-        item.desconto_valor + descontoRateado + item.total,
-      );
+      item.desconto_percentual = 0.0;
+      if (item.desconto_valor + descontoRateado + item.total > 0) {
+        item.desconto_percentual = AppMath.divide(
+          item.desconto_valor + descontoRateado,
+          item.desconto_valor + descontoRateado + item.total,
+        );
+      }
 
       item.total = AppMath.sum(item.total, -descontoRateado);
       restoDesconto = AppMath.sum(restoDesconto, -descontoRateado);
