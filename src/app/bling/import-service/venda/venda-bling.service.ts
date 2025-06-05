@@ -145,7 +145,6 @@ export class VendaBlingService extends ImportServiceBase<Venda, VendaBling> {
       const item = this.createItem(itemBling, produto, venda, venda.itens);
 
       this.acumularTotalizadores(item, totalizadores);
-      venda.itens.push(item);
     }
 
     this.ajustarDescontoVenda(vendaBling, venda.itens, totalizadores);
@@ -159,7 +158,12 @@ export class VendaBlingService extends ImportServiceBase<Venda, VendaBling> {
     itensExistentes: Item[],
   ): Item {
     const idOriginal = itemBling.id.toFixed(0);
-    const item = itensExistentes.find((i) => i.idOriginal === idOriginal) || new Item();
+    let item = itensExistentes.find((i) => i.idOriginal === idOriginal);
+
+    if (!item) {
+      item = new Item();
+      venda.itens.push(item);
+    }
 
     let precoVenda = 0.0;
 
