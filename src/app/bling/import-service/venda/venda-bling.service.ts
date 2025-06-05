@@ -279,17 +279,20 @@ export class VendaBlingService extends ImportServiceBase<Venda, VendaBling> {
       const formaPagamento = await this.formaPagamentoBlingService.getById(
         pagamentoBling.formaPagamento,
       );
-      const pagamento =
-        venda.pagamentos.find((value) => value.idOriginal == pagamentoBling.id.toFixed(0)) ||
-        new VendaPagamento();
+      let pagamento = venda.pagamentos.find(
+        (value) => value.idOriginal == pagamentoBling.id.toFixed(0),
+      );
+
+      if (!pagamento) {
+        pagamento = new VendaPagamento();
+        venda.pagamentos.push(pagamento);
+      }
       pagamento.formaPagamento = formaPagamento;
       pagamento.idOriginal = pagamentoBling.id.toFixed(0);
       pagamento.dataVencimento = dateBlingToDate(pagamentoBling.dataVencimento);
       pagamento.dataEmissao = venda.dataEmissao;
       pagamento.observacao = pagamentoBling.observacoes;
       pagamento.valor = pagamentoBling.valor;
-
-      venda.pagamentos.push(pagamento);
     }
 
     return venda.pagamentos;
