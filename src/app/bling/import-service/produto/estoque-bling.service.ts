@@ -54,7 +54,7 @@ export class EstoqueBlingServicePaged extends PagedImportServiceBase<
     private estoqueBlingService: EstoqueBlingService,
     private produtoService: ProdutoService,
   ) {
-    super('produto', controleImportacaoService, PaginacaoType.INDEX, estoqueBlingService);
+    super('estoque', controleImportacaoService, PaginacaoType.INDEX, estoqueBlingService);
   }
 
   interromper(): Promise<boolean> {
@@ -80,7 +80,7 @@ export class EstoqueBlingServicePaged extends PagedImportServiceBase<
     const produtos = await this.produtoService.repository.find({
       where: { situacao: 1 },
       take: 100,
-      skip: (this.controle.pagina - 1) * 100,
+      skip: (this.controle.pagina == 0 ? 1 : this.controle.pagina - 1) * 100,
       order: { id: 'ASC' },
     });
 
