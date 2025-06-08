@@ -111,6 +111,8 @@ export class AuthBlingService implements OnModuleInit {
     const authKey = `${blingConstants().client_id}:${blingConstants().client_secret}`;
     const body = `grant_type=${grant_type}&${grant_type === 'authorization_code' ? 'code' : 'refresh_token'}=${code}`;
 
+    logger.info(`Fazendo requisição para obter token (grant_type: ${grant_type})`);
+
     const response = await fetch('https://www.bling.com.br/Api/v3/oauth/token', {
       method: 'POST',
       body,
@@ -121,11 +123,15 @@ export class AuthBlingService implements OnModuleInit {
     });
 
     const content = await response.json();
-    if (response.status !== 200) throw new Error(`Erro ao obter token: ${JSON.stringify(content)}`);
+    if (response.status !== 200) {
+      logger.error(`Erro ao obter token: ${JSON.stringify(content)}`);
+      throw new Error(`Erro ao obter token: ${JSON.stringify(content)}`);
+    }
 
     const expire = new Date(Date.now() + content.expires_in * 1000);
     await this.saveTokens(content.access_token, expire, content.refresh_token);
 
+    logger.info('Token obtido e salvo com sucesso.');
     return {
       accessToken: content.access_token,
       expire,

@@ -321,6 +321,9 @@ export class VendaBlingPagedService extends PagedImportServiceBase<Venda, VendaB
       this.controle.data = subtrairMeses(this.controle.data, 4);
       this.controle.pagina = 0;
       this.controle.ultimoIndexProcessado = -1;
+      logger.info(
+        `[VendaBlingPagedService] Resetando controle de importação para os últimos 4 meses a partir de ${this.controle.data.toISOString()}`,
+      );
     }
     return;
   }

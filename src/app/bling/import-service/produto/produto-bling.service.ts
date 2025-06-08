@@ -19,18 +19,26 @@ import { Injectable } from '@nestjs/common';
 import { IsNull } from 'typeorm';
 import { AppMath } from 'src/shared/util/operacoes-matematicas/app-math-operations';
 import { RoundingModes } from 'src/shared/util/operacoes-matematicas/big-decimal-operations.copy';
+import { obterDataAnterior } from 'src/shared/util/date/date.utils';
+
+enum StrategyGetById {
+  CACHE_15_DIAS = 'cache_15_dias',
+  NORMAL = 'normal',
+  ESTOQUE = 'estoque',
+}
 
 @Injectable()
 export class ProdutoBlingService extends ImportServiceBase<Produto, ProdutoBling> {
   public async getByIdForce(Entity?: Partial<ProdutoBling['data']>) {
-    return this.getByIdInternal(true, Entity);
+    return this.getByIdInternal(StrategyGetById.CACHE_15_DIAS, Entity);
   }
 
   async getById(Entity?: Partial<ProdutoBling['data']>): Promise<Produto> {
-    return this.getByIdInternal(false, Entity);
+    return this.getByIdInternal(StrategyGetById.NORMAL, Entity);
   }
 
-  private async getByIdInternal(force: boolean, Entity: Partial<ProdutoBling['data']>) {
+  private async getByIdInternal(strategy: StrategyGetById, Entity: Partial<ProdutoBling['data']>) {
+    let buscouProdutoNaAPI = false;
     logger.info(`[ProdutoBlingService] Selecionando produto Id(${Entity.id})`);
     const produtos = await firstValueFrom(
       this.produtoService.find({ idOriginal: Entity.id.toFixed(0) }),
@@ -39,7 +47,7 @@ export class ProdutoBlingService extends ImportServiceBase<Produto, ProdutoBling
     let produto: Produto;
 
     if (produtos.length > 0) {
-      if (force) {
+      if (strategy in [StrategyGetById.CACHE_15_DIAS, StrategyGetById.ESTOQUE]) {
         produto = produtos[0];
       } else {
         logger.info(
@@ -51,12 +59,12 @@ export class ProdutoBlingService extends ImportServiceBase<Produto, ProdutoBling
 
     let produtoBling: ProdutoBling;
     const produtoCached = await this.getCachedEntity(Entity.id);
-    const quinzeDiasAtras = new Date();
-    quinzeDiasAtras.setDate(quinzeDiasAtras.getDate() - 60);
+    const quinzeDiasAtras = obterDataAnterior(15);
     if (
       produtoCached &&
       produtoCached.cache.atualizadoEm &&
-      produtoCached.cache.atualizadoEm > quinzeDiasAtras
+      produtoCached.cache.atualizadoEm > quinzeDiasAtras &&
+      strategy === StrategyGetById.CACHE_15_DIAS
     ) {
       logger.info(
         `[ProdutoBlingService] Encontrou produto no cache ${produtoCached.cache.idOriginal}`,
@@ -66,6 +74,7 @@ export class ProdutoBlingService extends ImportServiceBase<Produto, ProdutoBling
       const blingService = await this.blingService.getBling();
       try {
         produtoBling = await blingService.produtos.find({ idProduto: Entity.id }); //Está acontecendo o erro nesta linha
+        buscouProdutoNaAPI = true;
       } catch (error) {
         logger.error(
           `[ProdutoBlingService] Não foi possível consultar o produto ${Entity.id} na API do Bling`,
@@ -82,13 +91,14 @@ export class ProdutoBlingService extends ImportServiceBase<Produto, ProdutoBling
       else await this.saveCachedEntity(Entity.id.toFixed(0), produtoBling);
     }
 
-    return this.createProduto(produto, produtoBling, force);
+    return this.createProduto(produto, produtoBling, buscouProdutoNaAPI, strategy);
   }
 
   private async createProduto(
     produto: Produto,
     produtoBling: ProdutoBling,
-    force: boolean,
+    atualizarEstoque: boolean,
+    strategyGetById: StrategyGetById,
   ): Promise<Produto> {
     const update = produto && produto.id == 0 ? true : false;
     logger.info(`[ProdutoBlingService] ${update ? 'Atualizando' : 'Criando'} Produto`);
@@ -102,7 +112,7 @@ export class ProdutoBlingService extends ImportServiceBase<Produto, ProdutoBling
         id: produtoBling.data.variacao?.produtoPai.id,
       };
 
-      produtoPai = await this.getByIdInternal(force, produtoPaiBling);
+      produtoPai = await this.getByIdInternal(strategyGetById, produtoPaiBling);
     }
 
     const marcaP: Promise<ProdutoCategoriaOpcao> =
@@ -115,7 +125,6 @@ export class ProdutoBlingService extends ImportServiceBase<Produto, ProdutoBling
     const variacoesP: Promise<ProdutoCategoriaOpcao[]> = produtoBling.data.variacao
       ? this.produtoCategoriaOpcaoService.getVariacoesAsOpcoes(produtoBling.data.variacao?.nome)
       : Promise.resolve(null);
-
 
     const [fornecedor, marca, categoria, variacoes] = await Promise.all([
       fornecedorP,
@@ -139,6 +148,9 @@ export class ProdutoBlingService extends ImportServiceBase<Produto, ProdutoBling
     produto.valorCusto = produtoBling.data.fornecedor ? produtoBling.data.fornecedor.precoCusto : 0;
     produto.valorPreco = produtoBling.data.preco;
     produto.produtoPai = produtoPai;
+    if (atualizarEstoque) {
+      produto.saldoEstoque = produtoBling.data.estoque.saldoVirtualTotal ?? 0;
+    }
 
     produto.categorias = produto.categorias ?? [];
     produto.categorias.length = 0;
@@ -175,7 +187,7 @@ export class ProdutoBlingPagedService extends PagedImportServiceBase<Produto, Pr
     controleImportacaoService: ControleImportacaoService,
     private readonly blingService: BlingApiService,
     private produtoBlingService: ProdutoBlingService,
-    private produtoService: ProdutoService
+    private produtoService: ProdutoService,
   ) {
     super('produto', controleImportacaoService, PaginacaoType.INDEX, produtoBlingService);
   }
@@ -188,27 +200,53 @@ export class ProdutoBlingPagedService extends PagedImportServiceBase<Produto, Pr
     return this.produtoBlingService.getByIdForce(blingEntity);
   }
 
-  async seacrhProdutosInativos(): Promise<void> {
-    const quantidade = await this.produtoService.repository.count({ where: { fornecedor: IsNull() } });
-    const take = 100;
-    const paginas = AppMath.round((quantidade / 100), 0, RoundingModes.CEILING);
+  async searchProdutosInativos(): Promise<void> {
+    const clausula = this.produtoService.repository.create({ situacao: 0 });
 
-    for (let index = 0; index < paginas - 1; index++) {
-      const skip = index * 100;
+    const quantidade = await this.produtoService.repository.count({
+      where: clausula,
+    });
+
+    const take = 100;
+    const paginas = AppMath.round(quantidade / take, 0, RoundingModes.CEILING);
+
+    console.log(`Processando ${quantidade} produtos em ${paginas} páginas`);
+
+    // CORRIGIDO: Remove o "- 1" para processar todas as páginas
+    for (let paginaIndex = 0; paginaIndex < paginas; paginaIndex++) {
+      const skip = paginaIndex * take;
+
+      console.log(`Processando página ${paginaIndex + 1}/${paginas} (skip: ${skip})`);
+
       const produtos = await this.produtoService.repository.find({
         where: {
-          fornecedor: IsNull()
+          fornecedor: IsNull(),
         },
         skip,
         take,
-        order: { id: 'DESC' }
+        order: { id: 'DESC' },
       });
 
-      for (let index = 0; index < produtos.length - 1; index++) {
-        await this.produtoBlingService.getByIdForce({ id: parseInt(produtos[index].idOriginal) });
-      }
+      console.log(`Encontrados ${produtos.length} produtos nesta página`);
 
+      // CORRIGIDO: Remove o "- 1" e usa nome diferente para variável
+      for (let produtoIndex = 0; produtoIndex < produtos.length; produtoIndex++) {
+        const produto = produtos[produtoIndex];
+        console.log(
+          `Processando produto ${produtoIndex + 1}/${produtos.length}: ID ${produto.idOriginal}`,
+        );
+
+        try {
+          await this.produtoBlingService.getByIdForce({
+            id: parseInt(produto.idOriginal),
+          });
+        } catch (error) {
+          console.error(`Erro ao processar produto ${produto.idOriginal}:`, error);
+          // Opcional: continuar processamento ou parar aqui
+        }
+      }
     }
 
+    console.log('Processamento concluído');
   }
 }

@@ -88,13 +88,25 @@ export abstract class PagedImportServiceBase<Entity, APIEntity extends APIRespon
     return;
   }
 
+  async interromper(): Promise<boolean> {
+    return false;
+  }
+
   async start(): Promise<void> {
     logger.info(`[PagedImportService] Iniciando importação da entidade ${this.entity}`);
     await this.getControle();
+
+    const interromper = await this.interromper();
+
+    if (interromper) {
+      logger.info(`[PagedImportService] Interrompendo importação da entidade ${this.entity}`);
+      return;
+    }
+
     await this.resetControle();
 
     this.controle.iniciouConsultaEm = new Date();
-    this.controle.terminouConsultaEm = null;
+    if ((this.controle.pagina = 0)) this.controle.terminouConsultaEm = null;
 
     let searchParameters: Record<string, any> = this.controle.parametros ?? {};
     searchParameters['pagina'] = this.controle.pagina;
@@ -131,8 +143,6 @@ export abstract class PagedImportServiceBase<Entity, APIEntity extends APIRespon
       }
     }
 
-    this.controle.terminouConsultaEm = new Date();
-
     let temProximaPagina = false;
     switch (this.paginacaoType) {
       case PaginacaoType.DATE:
@@ -152,6 +162,10 @@ export abstract class PagedImportServiceBase<Entity, APIEntity extends APIRespon
       return this.start();
     }
     logger.info(`[PagedImportService] Não tem próxima página!`);
+    this.controle.terminouConsultaEm = new Date();
+    await this.controleService.repository.update(this.controle.id, {
+      terminouConsultaEm: this.controle.terminouConsultaEm,
+    });
     return;
   }
 

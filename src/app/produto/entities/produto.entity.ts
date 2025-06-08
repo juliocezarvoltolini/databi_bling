@@ -58,4 +58,6 @@ export class Produto {
   categorias: ProdutoCategoriaOpcao[];
   @Column({ name: 'identificador', type: 'varchar', length: 50, nullable: true })
   identificador: string;
+  @Column({ name: 'saldo_estoque', type: 'numeric', scale: 6, precision: 14, default: 0 })
+  saldoEstoque: number;
 }

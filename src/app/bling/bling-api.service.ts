@@ -10,7 +10,7 @@ export class BlingApiService {
   private isProcessing = false;
   private lastExecutionTime = 0;
 
-  constructor(private readonly authBlingService: AuthBlingService) { }
+  constructor(private readonly authBlingService: AuthBlingService) {}
 
   public async getBling(): Promise<Bling> {
     const updatedAccessToken = await this.authBlingService.getAccessToken();
