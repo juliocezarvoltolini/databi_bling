@@ -106,7 +106,7 @@ export abstract class PagedImportServiceBase<Entity, APIEntity extends APIRespon
     await this.resetControle();
 
     this.controle.iniciouConsultaEm = new Date();
-    if ((this.controle.pagina = 0)) this.controle.terminouConsultaEm = null;
+    if (this.controle.pagina <= 1) this.controle.terminouConsultaEm = null;
 
     let searchParameters: Record<string, any> = this.controle.parametros ?? {};
     searchParameters['pagina'] = this.controle.pagina;

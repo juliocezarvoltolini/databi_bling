@@ -14,8 +14,6 @@ export function toDateBling(date: Date | string): string {
   return dateString;
 }
 
-
-
 export function toDateTimeBling(date: Date | string, inicioOuFim: 'INICIO' | 'FIM'): string {
   let dateInstance: Date;
   if (date instanceof Date) {
@@ -40,8 +38,8 @@ export function updateDateOfSearchParameters(
     if (value == 'date') {
       parametros[key] = toDateBling(data); // Substitui 'date' pela data
     } else if (value == 'timestamp_inicio') {
-      parametros[key] = toDateTimeBling(data, 'INICIO')
-    } else if (value == 'timestamp_fim') parametros[key] = toDateTimeBling(data, 'FIM')
+      parametros[key] = toDateTimeBling(data, 'INICIO');
+    } else if (value == 'timestamp_fim') parametros[key] = toDateTimeBling(data, 'FIM');
   }
   return parametros;
 }
