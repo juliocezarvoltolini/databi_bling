@@ -91,7 +91,9 @@ export class EstoqueBlingServicePaged extends PagedImportServiceBase<
     logger.info(
       `[EstoqueBlingServicePaged] Buscando saldos de estoque para ${produtos.length} produtos na página ${this.controle.pagina}`,
     );
-    const estoques = await bling.estoques.getBalances({ idsProdutos: produtos.map((p) => p.id) });
+    const estoques = await bling.estoques.getBalances({
+      idsProdutos: produtos.map((p) => parseInt(p.idOriginal)),
+    });
     return estoques;
   }
   readAndSave(blingEntity: EstoqueBling['data'][0]): Promise<Produto> {
