@@ -80,7 +80,7 @@ export class EstoqueBlingServicePaged extends PagedImportServiceBase<
     const produtos = await this.produtoService.repository.find({
       where: { situacao: 1 },
       take: 100,
-      skip: this.controle.pagina * 100,
+      skip: (this.controle.pagina - 1) * 100,
       order: { id: 'ASC' },
     });
 

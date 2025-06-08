@@ -6,6 +6,7 @@ import { ProdutoBlingPagedService, ProdutoBlingService } from './produto/produto
 import { VendaBlingPagedService } from './venda/venda-bling.service';
 import { NfeBlingPagedService } from './nfe/nfe-bling.service';
 import { ConfigService } from '@nestjs/config';
+import { EstoqueBlingServicePaged } from './produto/estoque-bling.service';
 @Injectable()
 export class BlingObservable implements OnModuleInit {
   // private readonly FIVE_HOURS = 5 * 60 * 60 * 1000;
@@ -21,15 +22,16 @@ export class BlingObservable implements OnModuleInit {
     private readonly vendaBlingService: VendaBlingPagedService,
     private readonly nfeBlingService: NfeBlingPagedService,
     private readonly configService: ConfigService,
+    private readonly estoqueBlingService: EstoqueBlingServicePaged, // EstoqueBlingService,
   ) {
-    // this.subscriptions.push(produtoBlingPagedService);   
+    // this.subscriptions.push(produtoBlingPagedService);
     this.subscriptions.push(vendaBlingService);
     this.subscriptions.push(nfeBlingService);
+    this.subscriptions.push(estoqueBlingService);
     this.FIVE_HOURS = this.configService.get<number>('INTERVALO_SERVICO_BLING', 5) * 60 * 60 * 1000;
   }
 
   async onModuleInit() {
-    
     logger.info('🟢 BlingObservable iniciado');
     this.executeImport().then(() => this.scheduleNextRun());
   }
