@@ -13,7 +13,9 @@ import { logger } from 'src/logger/winston.logger';
 import { ProdutoBlingService } from './produto-bling.service';
 import { ControleImportacaoService } from 'src/app/controle-importacao/controle-importacao.service';
 import { DiaDaSemana, obterUltimoDiaDaSemana } from 'src/shared/util/date/date.utils';
+import { Injectable } from '@nestjs/common';
 
+@Injectable()
 export class EstoqueBlingService extends ImportServiceBase<
   Produto,
   { data: EstoqueBling['data'][0] }
@@ -44,6 +46,7 @@ export class EstoqueBlingService extends ImportServiceBase<
   }
 }
 
+@Injectable()
 export class EstoqueBlingServicePaged extends PagedImportServiceBase<
   Produto,
   { data: EstoqueBling['data'][0] }
