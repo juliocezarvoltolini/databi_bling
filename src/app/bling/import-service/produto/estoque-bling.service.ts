@@ -12,7 +12,6 @@ import { BlingApiService } from '../../bling-api.service';
 import { logger } from 'src/logger/winston.logger';
 import { ProdutoBlingService } from './produto-bling.service';
 import { ControleImportacaoService } from 'src/app/controle-importacao/controle-importacao.service';
-import { DiaDaSemana, obterUltimoDiaDaSemana } from 'src/shared/util/date/date.utils';
 import { Injectable } from '@nestjs/common';
 
 @Injectable()
@@ -60,20 +59,29 @@ export class EstoqueBlingServicePaged extends PagedImportServiceBase<
     super('estoque', controleImportacaoService, PaginacaoType.INDEX, estoqueBlingService);
   }
 
-  interromper(): Promise<boolean> {
-    if (this.controle.terminouConsultaEm != null) {
-      const ultimoSabado = obterUltimoDiaDaSemana(DiaDaSemana.SABADO, true);
-      const ultimaAtualizacao = new Date(this.controle.terminouConsultaEm);
-      ultimaAtualizacao.setHours(0, 0, 0, 0);
-      if (ultimaAtualizacao < ultimoSabado) {
-        logger.info(
-          `[EstoqueBlingServicePaged] Interrompendo a consulta, pois a última atualização foi em ${ultimaAtualizacao.toISOString()} e o último sábado foi ${ultimoSabado.toISOString()}`,
-        );
-        return Promise.resolve(false);
-      } else Promise.resolve(true);
-    } else {
-      return Promise.resolve(false);
+  override async resetControle(): Promise<void> {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const ultimaConsulta = new Date(this.controle.iniciouConsultaEm || today);
+    ultimaConsulta.setHours(0, 0, 0, 0);
+
+    if (ultimaConsulta.getTime() < today.getTime()) {
+      this.controle.data = null;
+      this.controle.pagina = 0;
+      this.controle.ultimoIndexProcessado = -1;
+      logger.info(`[EstoqueBlingPagedService] Resetando controle. ${today.toISOString()}`);
     }
+    return;
+  }
+
+  override async interromper(): Promise<boolean> {
+    if (this.controle.terminouConsultaEm == null) return false;
+
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    const ultimaConsulta = new Date(this.controle.terminouConsultaEm);
+    ultimaConsulta.setHours(0, 0, 0, 0);
+    return ultimaConsulta.getTime() == hoje.getTime();
   }
 
   async searchPage(

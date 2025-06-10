@@ -19,15 +19,15 @@ export class BlingObservable implements OnModuleInit {
     private readonly clienteBlingService: PessoaBlingPagedService,
     private readonly produtoBlingPagedService: ProdutoBlingPagedService,
     private readonly produtoBlingService: ProdutoBlingService,
-    private readonly vendaBlingService: VendaBlingPagedService,
-    private readonly nfeBlingService: NfeBlingPagedService,
+    private readonly vendaBlingPagedService: VendaBlingPagedService,
+    private readonly nfeBlingPagedService: NfeBlingPagedService,
     private readonly configService: ConfigService,
-    private readonly estoqueBlingService: EstoqueBlingServicePaged, // EstoqueBlingService,
+    private readonly estoqueBlingPagedService: EstoqueBlingServicePaged, // EstoqueBlingService,
   ) {
-    // this.subscriptions.push(produtoBlingPagedService);
-    this.subscriptions.push(vendaBlingService);
-    this.subscriptions.push(nfeBlingService);
-    this.subscriptions.push(estoqueBlingService);
+    this.subscriptions.push(produtoBlingPagedService);
+    this.subscriptions.push(vendaBlingPagedService);
+    this.subscriptions.push(nfeBlingPagedService);
+    this.subscriptions.push(estoqueBlingPagedService);
     this.FIVE_HOURS = this.configService.get<number>('INTERVALO_SERVICO_BLING', 5) * 60 * 60 * 1000;
   }
 

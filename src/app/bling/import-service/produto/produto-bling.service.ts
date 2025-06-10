@@ -191,6 +191,17 @@ export class ProdutoBlingPagedService extends PagedImportServiceBase<Produto, Pr
   ) {
     super('produto', controleImportacaoService, PaginacaoType.INDEX, produtoBlingService);
   }
+
+  override async interromper(): Promise<boolean> {
+    if (this.controle.terminouConsultaEm == null) return false;
+
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    const ultimaConsulta = new Date(this.controle.terminouConsultaEm);
+    ultimaConsulta.setHours(0, 0, 0, 0);
+    return ultimaConsulta.getTime() == hoje.getTime();
+  }
+
   async searchPage(searchParameters?: Record<string, any>): Promise<APICollection<ProdutoBling>> {
     const bling = await this.blingService.getBling();
     const pagina = await bling.produtos.get(searchParameters);
