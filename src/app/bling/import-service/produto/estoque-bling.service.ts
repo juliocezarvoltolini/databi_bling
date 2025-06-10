@@ -60,20 +60,21 @@ export class EstoqueBlingServicePaged extends PagedImportServiceBase<
   }
 
   override async resetControle(): Promise<void> {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const ultimaConsulta = new Date(this.controle.iniciouConsultaEm || today);
+    if (!this.controle.terminouConsultaEm) return;
+
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+
+    const ultimaConsulta = new Date(this.controle.terminouConsultaEm);
     ultimaConsulta.setHours(0, 0, 0, 0);
 
-    if (ultimaConsulta.getTime() < today.getTime()) {
+    if (ultimaConsulta < hoje) {
       this.controle.data = null;
       this.controle.pagina = 0;
       this.controle.ultimoIndexProcessado = -1;
-      logger.info(`[EstoqueBlingPagedService] Resetando controle. ${today.toISOString()}`);
+      logger.info(`[EstoqueBlingPagedService] Controle resetado em ${hoje.toDateString()}`);
     }
-    return;
   }
-
   override async interromper(): Promise<boolean> {
     if (this.controle.terminouConsultaEm == null) return false;
 
