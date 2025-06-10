@@ -149,7 +149,7 @@ export class ProdutoBlingService extends ImportServiceBase<Produto, ProdutoBling
     produto.valorPreco = produtoBling.data.preco;
     produto.produtoPai = produtoPai;
     if (atualizarEstoque) {
-      produto.saldoEstoque = produtoBling.data.estoque.saldoVirtualTotal ?? 0;
+      produto.saldoEstoque = produtoBling.data.estoque?.saldoVirtualTotal ?? 0;
     }
 
     produto.categorias = produto.categorias ?? [];
