@@ -121,6 +121,7 @@ export abstract class PagedImportServiceBase<Entity, APIEntity extends APIRespon
         comErro: true,
         ultimoErro: error?.message ?? 'Erro desconhecido',
       });
+      throw error;
     }
   }
 
