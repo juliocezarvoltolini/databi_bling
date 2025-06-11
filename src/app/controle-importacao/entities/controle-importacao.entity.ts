@@ -20,4 +20,8 @@ export class ControleImportacao {
   iniciouConsultaEm: Date;
   @Column({ name: 'terminou_consulta_em', type: 'timestamp with time zone', nullable: true })
   terminouConsultaEm: Date;
+  @Column({ name: 'com_erro', default: false })
+  comErro: boolean;
+  @Column({ name: 'ultimo_erro', type: 'text', nullable: true })
+  ultimoErro: string;
 }

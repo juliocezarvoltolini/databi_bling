@@ -105,9 +105,26 @@ export abstract class PagedImportServiceBase<Entity, APIEntity extends APIRespon
 
     await this.resetControle();
 
-    this.controle.iniciouConsultaEm = new Date();
-    if (this.controle.pagina <= 1) this.controle.terminouConsultaEm = null;
+    if (this.controle.terminouConsultaEm != null) this.controle.iniciouConsultaEm = new Date();
+    this.controle.terminouConsultaEm = null;
 
+    try {
+      await this.buscar();
+
+      this.controle.terminouConsultaEm = new Date();
+      await this.controleService.repository.update(this.controle.id, {
+        terminouConsultaEm: this.controle.terminouConsultaEm,
+        comErro: false,
+      });
+    } catch (error: any) {
+      await this.controleService.repository.update(this.controle.id, {
+        comErro: true,
+        ultimoErro: error?.message ?? 'Erro desconhecido',
+      });
+    }
+  }
+
+  private async buscar(): Promise<void> {
     let searchParameters: Record<string, any> = this.controle.parametros ?? {};
     searchParameters['pagina'] = this.controle.pagina;
     searchParameters['limite'] = 100;
@@ -159,13 +176,11 @@ export abstract class PagedImportServiceBase<Entity, APIEntity extends APIRespon
 
     if (temProximaPagina) {
       logger.info(`[PagedImportService] Tem próxima página!`);
-      return this.start();
+      return this.buscar();
     }
+
     logger.info(`[PagedImportService] Não tem próxima página!`);
-    this.controle.terminouConsultaEm = new Date();
-    await this.controleService.repository.update(this.controle.id, {
-      terminouConsultaEm: this.controle.terminouConsultaEm,
-    });
+
     return;
   }
 
