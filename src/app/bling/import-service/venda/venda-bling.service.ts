@@ -133,10 +133,17 @@ export class VendaBlingService extends ImportServiceBase<Venda, VendaBling> {
     vendaBling: VendaBling['data'],
   ): Promise<{ itens: Item[]; totalizadores: Totalizadores }> {
     const itensBling = [...vendaBling.itens].sort((a, b) => a.id - b.id);
+    const idsMantidos = vendaBling.itens.map((item) => item.id.toFixed(0));
 
     if (!venda.itens) venda.itens = [];
 
-    venda.itens.sort((a, b) => b.idOriginal.localeCompare(a.idOriginal));
+    const itensMatidos = venda.itens.filter((item) => idsMantidos.includes(item.idOriginal));
+
+    venda.itens.sort((a, b) => a.idOriginal.localeCompare(b.idOriginal));
+
+    //Eles conseguem remover itens de vendas que já foram fechadas.
+    //Então é necessário excluir os itens que não estão na resposta da API do Bling
+    venda.itens.splice(0, venda.itens.length, ...itensMatidos);
 
     const totalizadores = new Totalizadores();
 
