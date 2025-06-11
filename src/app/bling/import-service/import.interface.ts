@@ -26,12 +26,11 @@ export interface ImportService<Entity, APIEntity extends APIResponse<APIEntity>>
 }
 
 export abstract class ImportServiceBase<Entity, APIEntity extends APIResponse<APIEntity>>
-  implements ImportService<Entity, APIEntity>
-{
+  implements ImportService<Entity, APIEntity> {
   constructor(
     protected readonly responseLogService: ResponseLogService,
     protected readonly entity: string,
-  ) {}
+  ) { }
   async saveCachedEntity(
     id: string,
     blingEntity: APIEntity,
@@ -69,8 +68,7 @@ export interface PagedImportService<Entity, APIEntity extends APIResponse<APIEnt
 }
 
 export abstract class PagedImportServiceBase<Entity, APIEntity extends APIResponse<APIEntity>>
-  implements PagedImportService<Entity, APIEntity>
-{
+  implements PagedImportService<Entity, APIEntity> {
   protected controle: ControleImportacao;
   private searchParametersCopy: Record<string, any>;
 
@@ -82,7 +80,7 @@ export abstract class PagedImportServiceBase<Entity, APIEntity extends APIRespon
     private readonly controleService: ControleImportacaoService,
     private paginacaoType: PaginacaoType,
     protected readonly importService: ImportService<Entity, APIEntity>,
-  ) {}
+  ) { }
 
   async resetControle(): Promise<void> {
     return;
@@ -126,7 +124,7 @@ export abstract class PagedImportServiceBase<Entity, APIEntity extends APIRespon
   }
 
   private async buscar(): Promise<void> {
-    let searchParameters: Record<string, any> = this.controle.parametros ?? {};
+    let searchParameters: Record<string, any> = { ...(this.controle.parametros ?? {}) };
     searchParameters['pagina'] = this.controle.pagina;
     searchParameters['limite'] = 100;
 
@@ -177,7 +175,7 @@ export abstract class PagedImportServiceBase<Entity, APIEntity extends APIRespon
 
     if (temProximaPagina) {
       logger.info(`[PagedImportService] Tem próxima página!`);
-      return this.buscar();
+      return await this.buscar();
     }
 
     logger.info(`[PagedImportService] Não tem próxima página!`);
@@ -236,8 +234,17 @@ export abstract class PagedImportServiceBase<Entity, APIEntity extends APIRespon
     } else {
       const today = new Date();
       today.setHours(0, 0, 0, 0); // Ajusta para meia-noite
+      let lastDate: Date;
 
-      const lastDate = new Date(this.controle.data + 'T00:00:00');
+      if (typeof this.controle.data === 'string') {
+        lastDate = new Date(this.controle.data + 'T00:00:00');
+      } else if (this.controle.data instanceof Date) {
+        lastDate = this.controle.data;
+      } else {
+        // Fallback, se for um timestamp numérico ou algo inesperado
+        lastDate = new Date(this.controle.data);
+      }
+
       lastDate.setHours(0, 0, 0, 0); // Ajusta para meia-noite
 
       if (this.controle.ultimoIndexProcessado == 99) {
