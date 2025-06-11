@@ -105,7 +105,7 @@ export abstract class PagedImportServiceBase<Entity, APIEntity extends APIRespon
 
     await this.resetControle();
 
-    if (this.controle.terminouConsultaEm != null) this.controle.iniciouConsultaEm = new Date();
+    this.controle.iniciouConsultaEm = new Date();
     this.controle.terminouConsultaEm = null;
 
     try {
