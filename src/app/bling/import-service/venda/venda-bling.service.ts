@@ -281,10 +281,16 @@ export class VendaBlingService extends ImportServiceBase<Venda, VendaBling> {
   ): Promise<VendaPagamento[]> {
     // Ordena os itensBling por id
     pagamentosBling.sort((a, b) => a.id - b.id);
+    const idsMatidos = pagamentosBling.map((pag) => pag.id.toFixed(0));
 
     if (!venda.pagamentos) venda.pagamentos = [];
+    const pagamentosMantidos = venda.pagamentos.filter((pag) =>
+      idsMatidos.includes(pag.idOriginal),
+    );
+    venda.pagamentos.sort((a, b) => a.idOriginal.localeCompare(b.idOriginal));
 
-    venda.pagamentos.sort((a, b) => b.idOriginal.localeCompare(a.idOriginal));
+    //Podem haver pagamentos que precisam ser removidos
+    venda.pagamentos.splice(0, venda.pagamentos.length, ...pagamentosMantidos);
 
     for (const pagamentoBling of pagamentosBling) {
       const formaPagamento = await this.formaPagamentoBlingService.getById(
