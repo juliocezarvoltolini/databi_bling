@@ -54,6 +54,11 @@ export class VendaBlingService extends ImportServiceBase<Venda, VendaBling> {
   }
 
   async getById(Entity?: Partial<VendaBling['data']>): Promise<Venda> {
+
+    if (Entity.id === 21920924404) {
+      console.log('achei');
+    }
+
     logger.info(`[VendaBlingService] Selecionando venda Id(${Entity.id})`);
     const vendaRepository = this.dataSource.getRepository(Venda);
     let alterouTotal = false;
@@ -63,8 +68,11 @@ export class VendaBlingService extends ImportServiceBase<Venda, VendaBling> {
 
     if (Entity && vendas.length > 0) {
       const newStatusVenda = Entity.situacao.id == 9 ? 'F' : 'C';
-      alterouTotal = Entity.totalProdutos != vendas[0].total;
-      if (vendas[0].estado == newStatusVenda && !alterouTotal) {
+      const descontoBling = (Entity.totalProdutos - Entity.total);
+      const descontoVenda = vendas[0].desconto_rateado_valor;
+      const alterouDesconto = descontoBling != descontoVenda;
+      alterouTotal = Entity.total != vendas[0].total;
+      if (vendas[0].estado == newStatusVenda && !alterouTotal && !alterouDesconto) {
         logger.info(`[VendaBlingService] Encontrou a venda no banco de dados.`);
         return vendas[0];
       } else venda = vendas[0];
@@ -132,6 +140,7 @@ export class VendaBlingService extends ImportServiceBase<Venda, VendaBling> {
     venda: Venda,
     vendaBling: VendaBling['data'],
   ): Promise<{ itens: Item[]; totalizadores: Totalizadores }> {
+    
     const itensBling = [...vendaBling.itens].sort((a, b) => a.id - b.id);
     const idsMantidos = vendaBling.itens.map((item) => item.id.toFixed(0));
 
@@ -155,6 +164,7 @@ export class VendaBlingService extends ImportServiceBase<Venda, VendaBling> {
     }
 
     this.ajustarDescontoVenda(vendaBling, venda.itens, totalizadores);
+
     return { itens: venda.itens, totalizadores };
   }
 
@@ -177,10 +187,10 @@ export class VendaBlingService extends ImportServiceBase<Venda, VendaBling> {
     if (itemBling.valor > 0.0) {
       precoVenda = itemBling.desconto
         ? AppMath.round(
-            itemBling.valor / (1 - itemBling.desconto / 100),
-            2,
-            RoundingModes.HALF_DOWN,
-          )
+          itemBling.valor / (1 - itemBling.desconto / 100),
+          2,
+          RoundingModes.HALF_DOWN,
+        )
         : itemBling.valor;
     } else {
       //Pode entrar aqui quando for concedido 100% de desconto sobre o item
@@ -280,6 +290,7 @@ export class VendaBlingService extends ImportServiceBase<Venda, VendaBling> {
     venda: Venda,
   ): Promise<VendaPagamento[]> {
     // Ordena os itensBling por id
+
     pagamentosBling.sort((a, b) => a.id - b.id);
     const idsMatidos = pagamentosBling.map((pag) => pag.id.toFixed(0));
 
