@@ -71,12 +71,7 @@ export class VendaBlingService extends ImportServiceBase<Venda, VendaBling> {
       const alterouDesconto = Math.abs(descontoBling - descontoTotalVenda) > 0.01;
       alterouTotal = Math.abs(Entity.total - vendas[0].total) > 0.01;
 
-
-      if (
-        vendas[0].estado == newStatusVenda &&
-        !alterouTotal &&
-        !alterouDesconto
-      ) {
+      if (vendas[0].estado == newStatusVenda && !alterouTotal && !alterouDesconto) {
         logger.info(`[VendaBlingService] Encontrou a venda no banco de dados sem alterações.`);
         return vendas[0];
       } else {
@@ -218,10 +213,10 @@ export class VendaBlingService extends ImportServiceBase<Venda, VendaBling> {
       //Processo inverso para descobrir o valor do item.
       precoVenda = itemBling.desconto
         ? AppMath.round(
-          itemBling.valor / (1 - itemBling.desconto / 100),
-          2,
-          RoundingModes.HALF_DOWN,
-        )
+            itemBling.valor / (1 - itemBling.desconto / 100),
+            2,
+            RoundingModes.HALF_DOWN,
+          )
         : itemBling.valor;
     } else {
       //Pode entrar aqui quando for concedido 100% de desconto sobre o item

@@ -134,6 +134,7 @@ export abstract class PagedImportServiceBase<Entity, APIEntity extends APIRespon
     logger.info(`[PagedImportService] Buscando na API`);
     let lista = null;
     try {
+      logger.info(`Buscando - Parâmetros `, searchParameters);
       lista = await this.searchPage(searchParameters);
     } catch (error) {
       logger.error(`[PagedImportService] [${this.entity}] Erro ao buscar na API: ${error}`);
