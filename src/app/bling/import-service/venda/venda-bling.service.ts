@@ -70,22 +70,19 @@ export class VendaBlingService extends ImportServiceBase<Venda, VendaBling> {
       );
       const alterouDesconto = Math.abs(descontoBling - descontoTotalVenda) > 0.01;
       alterouTotal = Math.abs(Entity.total - vendas[0].total) > 0.01;
-      const alterouItens = Entity.itens?.length !== vendas[0].itens?.length;
-      const alterouPagamentos = Entity.parcelas?.length !== vendas[0].pagamentos?.length;
+
 
       if (
         vendas[0].estado == newStatusVenda &&
         !alterouTotal &&
-        !alterouDesconto &&
-        !alterouItens &&
-        !alterouPagamentos
+        !alterouDesconto
       ) {
         logger.info(`[VendaBlingService] Encontrou a venda no banco de dados sem alterações.`);
         return vendas[0];
       } else {
         venda = vendas[0];
         logger.info(
-          `[VendaBlingService] Venda ${Entity.id} possui alterações: total=${alterouTotal}, desconto=${alterouDesconto}, itens=${alterouItens}, pagamentos=${alterouPagamentos}`,
+          `[VendaBlingService] Venda ${Entity.id} possui alterações: total=${alterouTotal}, desconto=${alterouDesconto}`,
         );
       }
     }
@@ -221,10 +218,10 @@ export class VendaBlingService extends ImportServiceBase<Venda, VendaBling> {
       //Processo inverso para descobrir o valor do item.
       precoVenda = itemBling.desconto
         ? AppMath.round(
-            itemBling.valor / (1 - itemBling.desconto / 100),
-            2,
-            RoundingModes.HALF_DOWN,
-          )
+          itemBling.valor / (1 - itemBling.desconto / 100),
+          2,
+          RoundingModes.HALF_DOWN,
+        )
         : itemBling.valor;
     } else {
       //Pode entrar aqui quando for concedido 100% de desconto sobre o item
